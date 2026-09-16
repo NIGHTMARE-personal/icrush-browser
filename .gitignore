@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+output.log
+error.log
+lint-output.txt
+
+# Dependency directories
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+out/
+build/
+
+# Test reports
+playwright-report/
+test-results/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Sensitive internal agent configurations
+.agents/
+.cursor/
+task.md
+AGENTS.md
+PROJECT_MANIFEST.md
+UI_UX_SPECS.md
+foundation_gap_analysis.md
+debug-install.js
+write-path.js
+find-webview-styles.js
+scripts/agent-boardroom.mjs
+
+# OS files
+.DS_Store
+Thumbs.db
+
+.github/

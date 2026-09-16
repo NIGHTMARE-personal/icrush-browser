@@ -1,0 +1,68 @@
+.homescreen-pomodoro {
+  background: rgba(15, 15, 18, 0.55);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #f4f0ea;
+  gap: 16px;
+}
+
+.pomodoro-circle {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pomodoro-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.pomodoro-time {
+  font-size: 36px;
+  font-weight: bold;
+  color: #f4f0ea;
+  z-index: 1;
+}
+
+.pomodoro-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.pomodoro-modes {
+  display: flex;
+  gap: 8px;
+}
+
+.pomodoro-mode-btn {
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f0ea;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.pomodoro-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pomodoro-mode-btn.active {
+  border-color: #d4af37;
+}
+
+.pomodoro-session-count {
+  font-size: 13px;
+  color: rgba(244, 240, 234, 0.6);
+}

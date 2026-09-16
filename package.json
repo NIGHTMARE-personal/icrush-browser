@@ -1,0 +1,101 @@
+{
+  "name": "icrush-browser",
+  "version": "1.0.0",
+  "description": "An AI-first custom sovereign web browser engineered by Nightmare under NIGHTMARE PROJECTS",
+  "author": "Nightmare <founder@nightmareprojects.com> (NIGHTMARE PROJECTS)",
+  "copyright": "Copyright © 2026 NIGHTMARE PROJECTS. All rights reserved.",
+  "main": "main/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5174 && electron .\"",
+    "dev:clean": "cross-env PORT=5174 concurrently -k \"vite\" \"wait-on tcp:5174 && electron .\"",
+    "build:main": "tsc --project tsconfig.main.json",
+    "build:vite": "tsc && vite build",
+    "build:electron": "electron-builder",
+    "dist": "npm run build:vite && npm run build:electron",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "board": "node scripts/agent-boardroom.mjs status",
+    "board:status": "node scripts/agent-boardroom.mjs status",
+    "board:meet": "node scripts/agent-boardroom.mjs meet",
+    "board:lock": "node scripts/agent-boardroom.mjs lock",
+    "board:check": "node scripts/agent-boardroom.mjs check"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.18.0",
+    "@google/generative-ai": "^0.14.0",
+    "@sentry/electron": "^5.0.0",
+    "@supabase/supabase-js": "^2.43.0",
+    "@types/adm-zip": "^0.5.8",
+    "adm-zip": "^0.6.1",
+    "better-sqlite3": "^9.4.0",
+    "dotenv": "^16.4.4",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.0",
+    "keytar": "^7.9.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "uuid": "^9.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/electron": "^1.6.10",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.1.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vitest": "^1.1.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.icrush.browser",
+    "productName": "ICRUSH BROWSER",
+    "icon": "assets/icon.ico",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

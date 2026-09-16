@@ -1,0 +1,28 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.IPC_CHANNELS = void 0;
+exports.IPC_CHANNELS = {
+    GEMINI_SEND: 'gemini:send',
+    GEMINI_STREAM: 'gemini:stream',
+    GEMINI_DONE: 'gemini:done',
+    BROWSER_NAVIGATE: 'browser:navigate',
+    BROWSER_GO_BACK: 'browser:go-back',
+    BROWSER_GO_FORWARD: 'browser:go-forward',
+    BROWSER_REFRESH: 'browser:refresh',
+    BROWSER_NEW_TAB: 'browser:new-tab',
+    BROWSER_CLOSE_TAB: 'browser:close-tab',
+    BROWSER_FOCUS_TAB: 'browser:focus-tab',
+    BROWSER_TAB_UPDATED: 'browser:tab-updated',
+    BROWSER_TAB_CREATED: 'browser:tab-created',
+    BROWSER_TAB_CLOSED: 'browser:tab-closed',
+    SETTINGS_GET_SEARCH_ENGINE: 'settings:get-search-engine',
+    SETTINGS_SET_SEARCH_ENGINE: 'settings:set-search-engine',
+    AGENT_EXECUTE: 'agent:execute',
+    AGENT_EXTRACT_PAGE: 'agent:extract-page',
+    AGENT_GET_MEMORY: 'agent:get-memory',
+    AGENT_SET_MEMORY: 'agent:set-memory',
+    AGENT_GET_SKILLS: 'agent:get-skills',
+    AGENT_SAVE_SKILL: 'agent:save-skill',
+    AGENT_DELETE_SKILL: 'agent:delete-skill',
+    AGENT_RUN_SKILL: 'agent:run-skill',
+};
