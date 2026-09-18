@@ -466,8 +466,11 @@ class TorManager {
             }
         }
         console.log('[Tor] Bundled Tor binary not found or copy failed. Starting Auto-Downloader...');
-        // Download the official Tor Expert Bundle
-        const version = '13.5.6';
+        const versions = ['14.0.4', '13.5.13', '13.5.6'];
+        const mirrors = [
+            (v, f) => `https://archive.torproject.org/tor-package-archive/torbrowser/${v}/${f}`,
+            (v, f) => `https://dist.torproject.org/torbrowser/${v}/${f}`,
+        ];
         let platform = '';
         let arch = '';
         if (process.platform === 'win32') {
@@ -485,95 +488,130 @@ class TorManager {
         else {
             throw new Error(`Unsupported platform: ${process.platform}`);
         }
-        const bundleFilename = `tor-expert-bundle-${platform}-${arch}-${version}.tar.gz`;
-        const bundleUrl = `https://archive.torproject.org/tor-package-archive/torbrowser/${version}/${bundleFilename}`;
-        const tempArchive = path_1.default.join(this.config.dataDir, 'tor-expert-bundle.tar.gz');
-        try {
-            console.log(`[Tor] Downloading Expert Bundle from: ${bundleUrl}`);
-            const response = await fetch(bundleUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to download Tor bundle: ${response.statusText}`);
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            await fs_1.default.promises.writeFile(tempArchive, buffer);
-            console.log('[Tor] Download completed successfully.');
-            // Extract using system tar (no shell, validated paths)
-            console.log(`[Tor] Extracting archive to: ${this.config.dataDir}`);
-            const resolvedArchive = path_1.default.resolve(tempArchive);
-            const resolvedDataDir = path_1.default.resolve(this.config.dataDir);
-            // Validate paths are within expected directories
-            if (!resolvedArchive.startsWith(resolvedDataDir) && !resolvedArchive.startsWith(path_1.default.resolve(electron_1.app.getPath('temp')))) {
-                throw new Error('Invalid archive path');
-            }
-            await new Promise((resolve, reject) => {
-                const tar = (0, child_process_1.spawn)('tar', ['-xf', resolvedArchive, '-C', resolvedDataDir], { stdio: 'ignore' });
-                tar.on('close', code => {
-                    if (code === 0)
-                        resolve();
-                    else
-                        reject(new Error(`tar exited with code ${code}`));
-                });
-                tar.on('error', reject);
-            });
-            console.log('[Tor] Extraction completed.');
-            // Find executables and move them to bin/
-            const findAndMove = (dir) => {
-                const files = fs_1.default.readdirSync(dir);
-                for (const file of files) {
-                    const fullPath = path_1.default.join(dir, file);
-                    const stat = fs_1.default.statSync(fullPath);
-                    if (stat.isDirectory()) {
-                        findAndMove(fullPath);
+        for (const version of versions) {
+            const bundleFilename = `tor-expert-bundle-${platform}-${arch}-${version}.tar.gz`;
+            for (const mirror of mirrors) {
+                const bundleUrl = mirror(version, bundleFilename);
+                const tempArchive = path_1.default.join(this.config.dataDir, 'tor-expert-bundle.tar.gz');
+                try {
+                    console.log(`[Tor] Trying download from: ${bundleUrl}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 60000);
+                    const response = await fetch(bundleUrl, { signal: controller.signal });
+                    clearTimeout(timeout);
+                    if (!response.ok) {
+                        console.warn(`[Tor] Download failed (${response.status}): ${bundleUrl}`);
+                        continue;
                     }
-                    else {
-                        const lowerFile = file.toLowerCase();
-                        if (lowerFile === 'tor.exe' ||
-                            lowerFile === 'tor' ||
-                            lowerFile === 'obfs4proxy.exe' ||
-                            lowerFile === 'obfs4proxy' ||
-                            lowerFile === 'snowflake-client.exe' ||
-                            lowerFile === 'snowflake-client' ||
-                            lowerFile === 'lyrebird.exe' ||
-                            lowerFile === 'lyrebird' ||
-                            lowerFile === 'conjure-client.exe' ||
-                            lowerFile === 'conjure-client' ||
-                            lowerFile === 'tor-gencert.exe' ||
-                            lowerFile === 'tor-gencert') {
-                            const dest = path_1.default.join(binDir, file);
-                            fs_1.default.renameSync(fullPath, dest);
-                            console.log(`[Tor] Moved executable ${file} to ${dest}`);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const buffer = Buffer.from(arrayBuffer);
+                    await fs_1.default.promises.writeFile(tempArchive, buffer);
+                    console.log('[Tor] Download completed successfully.');
+                    console.log(`[Tor] Extracting archive to: ${this.config.dataDir}`);
+                    const resolvedArchive = path_1.default.resolve(tempArchive);
+                    const resolvedDataDir = path_1.default.resolve(this.config.dataDir);
+                    if (!resolvedArchive.startsWith(resolvedDataDir) && !resolvedArchive.startsWith(path_1.default.resolve(electron_1.app.getPath('temp')))) {
+                        throw new Error('Invalid archive path');
+                    }
+                    await new Promise((resolve, reject) => {
+                        const tar = (0, child_process_1.spawn)('tar', ['-xf', resolvedArchive, '-C', resolvedDataDir], { stdio: 'ignore' });
+                        tar.on('close', code => {
+                            if (code === 0)
+                                resolve();
+                            else
+                                reject(new Error(`tar exited with code ${code}`));
+                        });
+                        tar.on('error', reject);
+                    });
+                    console.log('[Tor] Extraction completed.');
+                    const findAndMove = (dir) => {
+                        const files = fs_1.default.readdirSync(dir);
+                        for (const file of files) {
+                            const fullPath = path_1.default.join(dir, file);
+                            const stat = fs_1.default.statSync(fullPath);
+                            if (stat.isDirectory()) {
+                                findAndMove(fullPath);
+                            }
+                            else {
+                                const lowerFile = file.toLowerCase();
+                                if (lowerFile === 'tor.exe' || lowerFile === 'tor' ||
+                                    lowerFile === 'obfs4proxy.exe' || lowerFile === 'obfs4proxy' ||
+                                    lowerFile === 'snowflake-client.exe' || lowerFile === 'snowflake-client' ||
+                                    lowerFile === 'lyrebird.exe' || lowerFile === 'lyrebird' ||
+                                    lowerFile === 'conjure-client.exe' || lowerFile === 'conjure-client' ||
+                                    lowerFile === 'tor-gencert.exe' || lowerFile === 'tor-gencert') {
+                                    const dest = path_1.default.join(binDir, file);
+                                    fs_1.default.renameSync(fullPath, dest);
+                                    console.log(`[Tor] Moved executable ${file} to ${dest}`);
+                                }
+                                else if (lowerFile === 'geoip' || lowerFile === 'geoip6') {
+                                    const dest = path_1.default.join(this.config.dataDir, file);
+                                    fs_1.default.renameSync(fullPath, dest);
+                                    console.log(`[Tor] Moved geoip file ${file} to ${dest}`);
+                                }
+                            }
                         }
-                        else if (lowerFile === 'geoip' || lowerFile === 'geoip6') {
-                            const dest = path_1.default.join(this.config.dataDir, file);
-                            fs_1.default.renameSync(fullPath, dest);
-                            console.log(`[Tor] Moved geoip file ${file} to ${dest}`);
+                    };
+                    findAndMove(this.config.dataDir);
+                    this.setUnixPermissions(binDir);
+                    try {
+                        if (fs_1.default.existsSync(tempArchive)) {
+                            fs_1.default.unlinkSync(tempArchive);
+                        }
+                        const dirsToRemove = ['tor', 'Data'];
+                        for (const dirName of dirsToRemove) {
+                            const dirPath = path_1.default.join(this.config.dataDir, dirName);
+                            if (fs_1.default.existsSync(dirPath)) {
+                                fs_1.default.rmSync(dirPath, { recursive: true, force: true });
+                            }
                         }
                     }
-                }
-            };
-            findAndMove(this.config.dataDir);
-            this.setUnixPermissions(binDir);
-            // Cleanup remaining folders and temp files
-            try {
-                if (fs_1.default.existsSync(tempArchive)) {
-                    fs_1.default.unlinkSync(tempArchive);
-                }
-                const dirsToRemove = ['tor', 'Data'];
-                for (const dirName of dirsToRemove) {
-                    const dirPath = path_1.default.join(this.config.dataDir, dirName);
-                    if (fs_1.default.existsSync(dirPath)) {
-                        fs_1.default.rmSync(dirPath, { recursive: true, force: true });
+                    catch (cleanupErr) {
+                        console.warn('[Tor] Failed to cleanup temp files:', cleanupErr);
                     }
+                    // Verify the tor binary was actually extracted
+                    const torExe = path_1.default.join(binDir, process.platform === 'win32' ? 'tor.exe' : 'tor');
+                    if (fs_1.default.existsSync(torExe)) {
+                        console.log(`[Tor] Successfully downloaded and extracted Tor binary: ${torExe}`);
+                        return;
+                    }
+                    console.warn(`[Tor] Extraction succeeded but tor binary not found at ${torExe}, trying next mirror...`);
                 }
-            }
-            catch (cleanupErr) {
-                console.warn('[Tor] Failed to cleanup temp files:', cleanupErr);
+                catch (err) {
+                    console.warn(`[Tor] Download attempt failed for ${bundleUrl}:`, err);
+                    continue;
+                }
             }
         }
+        throw new Error('Failed to download Tor from all mirrors and versions. Check network connection.');
+    }
+    async fetchFreshBridges(transport = 'obfs4') {
+        try {
+            console.log(`[Tor] Fetching fresh ${transport} bridges from BridgeDB...`);
+            const response = await fetch(`https://bridges.torproject.org/bridges?transport=${transport}`, {
+                headers: { 'Accept': 'text/plain' },
+            });
+            if (!response.ok)
+                return [];
+            const text = await response.text();
+            const lines = text.split('\n').filter(l => l.trim().startsWith(`Bridge ${transport}`));
+            return lines.map(line => {
+                const parts = line.replace(`Bridge ${transport}`, '').trim().split(/\s+/);
+                const [address, port, fingerprint] = parts;
+                const certMatch = line.match(/cert=(\S+)/);
+                return {
+                    type: transport,
+                    address,
+                    port: parseInt(port),
+                    fingerprint,
+                    cert: certMatch?.[1],
+                    iatMode: 0,
+                };
+            }).slice(0, 3);
+        }
         catch (err) {
-            console.error('[Tor] Auto-downloader failed:', err);
-            throw err;
+            console.warn('[Tor] Failed to fetch fresh bridges:', err);
+            return [];
         }
     }
     setUnixPermissions(binDir) {
@@ -643,9 +681,9 @@ class TorManager {
                         .join('\n');
                 }
                 else {
-                    // Modern default snowflake bridges (Tor Browser 13.5+ format)
+                    // Current snowflake bridges (2026) — these are symbolic IPs that route via WebRTC volunteers
                     bridgeConfig = [
-                        'Bridge snowflake 192.0.2.3:80 2B280B23E1A8F6679B28F9C5A6DC07E7C15AB486 fingerprint=2B280B23E1A8F6679B28F9C5A6DC07E7C15AB486 url=https://1098762253.rsc.cdn77.org/ fronts=www.cdn77.org,www.phpmyadmin.net ice=stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.com:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478 utls-imitate=hellorandomizedalpn',
+                        'Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://1098762253.rsc.cdn77.org/ fronts=www.cdn77.org,www.phpmyadmin.net ice=stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.com:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478 utls-imitate=hellorandomizedalpn',
                         'Bridge snowflake 192.0.2.4:80 8838024498816A039FCBBAB14E6F40A0843051FA fingerprint=8838024498816A039FCBBAB14E6F40A0843051FA url=https://1098762253.rsc.cdn77.org/ fronts=www.cdn77.org,www.phpmyadmin.net ice=stun:stun.l.google.com:19302,stun:stun.antisip.com:3478,stun:stun.bluesip.net:3478,stun:stun.dus.net:3478,stun:stun.epygi.com:3478,stun:stun.sonetel.com:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.voys.nl:3478 utls-imitate=hellorandomizedalpn',
                     ].join('\n');
                 }
@@ -657,11 +695,11 @@ class TorManager {
                         .join('\n');
                 }
                 else {
-                    // Default fallback obfs4 bridges (from official Tor Browser defaults)
+                    // Current working obfs4 bridges (2026-09, from bridges.torproject.org)
                     bridgeConfig = [
-                        'Bridge obfs4 192.95.36.142:443 CDF2E852BF539B823610E13909A8F9EC6DABFF0A cert=qUVQ0srL1JI/vO6V6m/24anYXiJD3QP2HgzUKQtQ7GRqqUvs7P+tG43RtAqdhLOALP7DJQ iat-mode=1',
-                        'Bridge obfs4 38.229.1.78:80 C8CBDB2464FC9804A69531437BCF2BE31FDD2EE4 cert=Hmyfd2ev46gGY7NoVxA9ngrPF2zCZtzskRTzoWXbxNkzeVnGFPWmrTtILRyqCTjHR+s9dg iat-mode=1',
-                        'Bridge obfs4 85.31.186.98:443 011F2599C0E9B27EE74B353155E244813763C3E5 cert=ayq0XzCwhpdysn5o0EyDUbmSOx3X/oTEbzDMvczHOl79AASbmkHQnr3ldqYpFEL6EvYDNQ iat-mode=0',
+                        'Bridge obfs4 193.11.166.194:27025 1AE2C08904527FEE9E17A1369A37E4B593640860 cert=ItvYzItZI6nu/pre0TNyMOxnF/0q7yLzG7HhB0tQTLLB6hVGDCaFWE3ZQf0MTRZsP4rbE5aw iat-mode=0',
+                        'Bridge obfs4 193.11.166.194:27020 86AC7B8D430DAC4117E9F42C9EAED18133863AAF cert=bMgz1VCON4ESt37+/V/cHMLADl6FgUc2rRIAzSQR1IBhVj3sFHT13rVFDbEcN0OLY3EXEg iat-mode=0',
+                        'Bridge obfs4 45.145.95.12:27015 C5B7A2B66B5A1D7C05B62A343A5B42C142B7A822 cert=TD7PbUO0/0k6xYHMPW3vJxICfkMZNdkRrb63Zhl5j9tMOv+O4V3WHXJ8E4bA9OG9iQJ9bg iat-mode=0',
                     ].join('\n');
                 }
             }
@@ -1239,6 +1277,30 @@ ${transportPlugins}
     }
     setKillSwitch(enabled) {
         this.killSwitchEnabled = enabled;
+        if (enabled && this.torModeEnabled) {
+            this.applyKillSwitch();
+        }
+        else {
+            this.removeKillSwitch();
+        }
+    }
+    applyKillSwitch() {
+        // SECURITY: Block all traffic on default session when Tor kill switch is active
+        // This prevents traffic from leaking outside Tor
+        electron_1.session.defaultSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+            if (this.killSwitchEnabled && this.torModeEnabled && !this.status.connected) {
+                // Block all non-Tor traffic when kill switch is on and Tor is disconnected
+                callback({ cancel: true });
+            }
+            else {
+                callback({ cancel: false });
+            }
+        });
+    }
+    removeKillSwitch() {
+        electron_1.session.defaultSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (_details, callback) => {
+            callback({ cancel: false });
+        });
     }
     async addBridge(bridge) {
         this.config.bridges.push(bridge);
@@ -1329,4 +1391,6 @@ function initTorManager(windowGetter = () => null) {
             });
         }
     });
+    // Auto-download missing Tor binaries on startup (fire-and-forget)
+    exports.torManager.syncMissingTransportBinaries().catch(() => { });
 }

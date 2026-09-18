@@ -9,7 +9,7 @@ import type {
   EncryptedMemoryEntry,
   SensitiveActionPrompt,
   SensitiveActionDecision,
-} from '../types/agent-contracts';
+} from '../../shared/agent-contracts';
 
 /**
  * Cross-Layer React Hook for Agent Subsystems

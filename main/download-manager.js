@@ -11,7 +11,7 @@ const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const crypto_1 = __importDefault(require("crypto"));
-const security_manager_js_1 = require("./security-manager.js");
+const security_manager_1 = require("./security-manager");
 const state = {
     downloads: new Map(),
     downloadDir: path_1.default.join(electron_1.app.getPath('downloads'), 'GeminiBrowser'),
@@ -87,7 +87,7 @@ async function downloadSingleStream(downloadId, downloadItem, mainWindow) {
             currentItem.state = 'completed';
             currentItem.endTime = Date.now();
             mainWindow?.webContents.send('download:updated', { id: downloadId, ...currentItem });
-            security_manager_js_1.securityManager
+            security_manager_1.securityManager
                 .scanDownload(downloadId, currentItem.savePath + '.download', currentItem.filename)
                 .then(scanResult => {
                 currentItem.scanResult = scanResult;
@@ -191,7 +191,7 @@ async function downloadParallel(downloadId, downloadItem, mainWindow, totalBytes
             currentItem.state = 'completed';
             currentItem.endTime = Date.now();
             mainWindow?.webContents.send('download:updated', { id: downloadId, ...currentItem });
-            security_manager_js_1.securityManager
+            security_manager_1.securityManager
                 .scanDownload(downloadId, currentItem.savePath + '.download', currentItem.filename)
                 .then(scanResult => {
                 currentItem.scanResult = scanResult;
@@ -301,7 +301,7 @@ function initDownloadManager(mainWindow) {
                         download.state = 'completed';
                         download.endTime = Date.now();
                         targetWin?.webContents.send('download:updated', { id: downloadId, ...download });
-                        security_manager_js_1.securityManager
+                        security_manager_1.securityManager
                             .scanDownload(downloadId, download.savePath + '.download', download.filename)
                             .then(scanResult => {
                             download.scanResult = scanResult;

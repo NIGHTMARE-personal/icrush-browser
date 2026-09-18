@@ -116,6 +116,10 @@ export function getBestModelForProvider(providerId: string, availableModels: str
 
 export async function detectLocalModels(): Promise<LocalModel[]> {
   try {
+    if (window.electronAPI?.ollama?.listModels) {
+      return await window.electronAPI.ollama.listModels();
+    }
+    // Fallback: direct fetch (works in dev but may be blocked by CSP in prod)
     const response = await fetch('http://localhost:11434/api/tags', {
       method: 'GET',
       signal: AbortSignal.timeout(3000),

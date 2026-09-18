@@ -3,6 +3,15 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import keytar from 'keytar';
+import {
+  buildThreatIndex,
+  emptyThreatIndex,
+  fetchThreatFeeds,
+  loadThreatCache,
+  matchThreatIndex,
+  saveThreatCache,
+} from './threat-feeds';
+import type { ThreatFeedIndex } from './threat-feeds';
 
 const SERVICE_NAME = 'GeminiBrowser';
 const VT_KEY_NAME = 'virustotal-api-key';
@@ -37,7 +46,7 @@ const DANGEROUS_EXTENSIONS = [
   '.sh',
   '.scr',
   '.vbs',
-  '.js',
+  '',
   '.vbe',
   '.jse',
   '.wsf',
@@ -60,14 +69,19 @@ class SecurityManager {
   private scanResults: Map<string, ScanResult> = new Map();
   private dynamicBlockedDomains: Set<string> = new Set();
   private blocklistPath: string;
+  private threatIndex: ThreatFeedIndex = emptyThreatIndex();
+  private threatCachePath: string;
 
   constructor() {
     this.configPath = path.join(app.getPath('userData'), 'security-config.json');
     this.blocklistPath = path.join(app.getPath('userData'), 'blocked-domains.json');
+    this.threatCachePath = path.join(app.getPath('userData'), 'threat-feeds.json');
     this.loadSettings();
     this.loadCachedBlocklist();
+    this.loadThreatCache();
     this.seedUserApiKey();
     this.fetchThreatFeed();
+    this.refreshThreatFeeds();
   }
 
   private loadSettings() {
@@ -169,6 +183,32 @@ class SecurityManager {
     }
   }
 
+  private loadThreatCache(): void {
+    const cached = loadThreatCache(this.threatCachePath);
+    if (cached) this.threatIndex = cached;
+  }
+
+  /** Background refresh of URLhaus + OpenPhish; never blocks startup. */
+  private refreshThreatFeeds(): void {
+    void (async () => {
+      try {
+        const feeds = await fetchThreatFeeds();
+        const ids = Object.keys(feeds);
+        if (ids.length === 0) return;
+        this.threatIndex = buildThreatIndex(feeds);
+        saveThreatCache(this.threatCachePath, this.threatIndex);
+        console.log(
+          `[ThreatFeeds] Refreshed: ${ids.map(id => `${id} (${feeds[id].urls.length})`).join(', ')}`
+        );
+      } catch (err) {
+        console.log(
+          '[ThreatFeeds] Refresh failed, keeping cache:',
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    })();
+  }
+
   private async fetchThreatFeed() {
     try {
       const response = await fetch(
@@ -223,6 +263,12 @@ class SecurityManager {
       this.dynamicBlockedDomains.has(hostname.replace(/^www\./, ''))
     ) {
       return { safe: false, reason: 'malware' };
+    }
+
+    // Check aggregated threat feeds (URLhaus malware, OpenPhish phishing)
+    const feedHit = matchThreatIndex(url, this.threatIndex);
+    if (feedHit.matched) {
+      return { safe: false, reason: feedHit.reason ?? 'malware' };
     }
 
     // 1. Check local blocklist patterns (immediate match)
@@ -388,8 +434,11 @@ class SecurityManager {
     );
 
     ipcMain.handle('security:get-api-key', async () => {
-      // Return the actual key — masking is done in the renderer UI layer
-      return await this.getApiKey();
+      // SECURITY: Never return the raw API key to the renderer.
+      // Return a masked version for display purposes only.
+      const key = await this.getApiKey();
+      if (!key) return null;
+      return key.slice(0, 4) + '***' + key.slice(-4);
     });
 
     ipcMain.handle('security:set-api-key', async (_event, key: string) => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrandLogo } from './BrandLogo';
 import { PROVIDERS, detectProviderFromKey, detectLocalModels, type LocalModel } from '../utils/providers';
+import { useToast } from './Toast';
 
 interface SearchEngine {
   id: string;
@@ -74,6 +75,7 @@ export function SettingsModal({
   tabLayout = 'top',
   onTabLayoutChange,
 }: SettingsModalProps) {
+  const { error, success, warning, info } = useToast();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [modalWidth, setModalWidth] = useState(() => {
     return parseInt(localStorage.getItem('settings-modal-width') || '720');
@@ -85,12 +87,7 @@ export function SettingsModal({
   const [extensionUrl, setExtensionUrl] = useState('');
   const [isInstallingExt, setIsInstallingExt] = useState(false);
 
-  const [accounts, setAccounts] = useState<Account[]>([
-    { id: 1, name: 'Account 1', email: 'amits@icrushbrowser.com', active: true },
-    { id: 2, name: 'Account 1', email: 'work@icrushbrowser.com', active: false },
-    { id: 3, name: 'Account 2', email: 'guest@icrushbrowser.com', active: false },
-    { id: 4, name: 'Account 3', email: 'test@icrushbrowser.com', active: false },
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
   const [showProfileEditor, setShowProfileEditor] = useState(false);
   const [editorImageSrc, setEditorImageSrc] = useState<string | null>(null);
@@ -143,29 +140,37 @@ export function SettingsModal({
   // VPN States
   const [vpnStatus, setVpnStatus] = useState<any>({
     connected: false,
-    countryCode: '',
-    countryName: '',
+    serverName: '',
     serverLatency: 0,
     bandwidth: { up: 0, down: 0, total: 0 },
   });
-  const [vpnServers, setVpnServers] = useState<any[]>([]);
-  const [selectedServer, setSelectedServer] = useState<any>(null);
+  const [vpnConfig, setVpnConfig] = useState<{ raw: string; parsed: any }>({ raw: '', parsed: null });
+  const [vpnConfigInput, setVpnConfigInput] = useState('');
   const [vpnMode, setVpnMode] = useState(false);
   const [killSwitch, setKillSwitch] = useState(true);
   const [isVpnConnecting, setIsVpnConnecting] = useState(false);
   const [vpnDnsProtection, setVpnDnsProtection] = useState(() => localStorage.getItem('vpn_dns_protection') !== 'false');
   const [vpnSplitTunnel, setVpnSplitTunnel] = useState(() => localStorage.getItem('vpn_split_tunnel') === 'true');
-  const [serverSearchQuery, setServerSearchQuery] = useState('');
+  const [vpnConfigError, setVpnConfigError] = useState('');
+  const [torCloudRouting, setTorCloudRouting] = useState(() => localStorage.getItem('torCloudRouting') !== 'false');
 
   // Profile & Cloud Sync States
-  const [profileName, setProfileName] = useState(() => localStorage.getItem('gemini-browser-profile-name') || 'Amits');
-  const [profileEmail, setProfileEmail] = useState(() => localStorage.getItem('gemini-browser-profile-email') || 'amits@icrushbrowser.com');
+  const [profileName, setProfileName] = useState(() => {
+    const id = localStorage.getItem('gemini-browser-active-profile-id') || '1';
+    return localStorage.getItem(`gemini-browser-profile-name-${id}`) || localStorage.getItem('gemini-browser-profile-name') || 'NIGHTMARE';
+  });
+  const [profileEmail, setProfileEmail] = useState(() => {
+    const id = localStorage.getItem('gemini-browser-active-profile-id') || '1';
+    return localStorage.getItem(`gemini-browser-profile-email-${id}`) || localStorage.getItem('gemini-browser-profile-email') || 'nightmare@icrushbrowser.com';
+  });
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(() => localStorage.getItem('gemini-browser-sync-active') === 'true');
   const [syncTabs, setSyncTabs] = useState(() => localStorage.getItem('sync_tabs') !== 'false');
   const [syncBookmarks, setSyncBookmarks] = useState(() => localStorage.getItem('sync_bookmarks') !== 'false');
   const [syncHistory, setSyncHistory] = useState(() => localStorage.getItem('sync_history') !== 'false');
   const [syncPass, setSyncPass] = useState(() => localStorage.getItem('sync_passwords') !== 'false');
   const [syncAI, setSyncAI] = useState(() => localStorage.getItem('sync_ai') !== 'false');
+  const [syncExtensions, setSyncExtensions] = useState(() => localStorage.getItem('sync_extensions') !== 'false');
+  const [syncSettings, setSyncSettings] = useState(() => localStorage.getItem('sync_settings') !== 'false');
 
   useEffect(() => {
     if (isOpen) {
@@ -175,11 +180,9 @@ export function SettingsModal({
             const status = await window.electronAPI.vpn.getStatus();
             setVpnStatus(status);
 
-            const servers = await window.electronAPI.vpn.getServers();
-            setVpnServers(servers);
-
-            const server = await window.electronAPI.vpn.getSelectedServer();
-            setSelectedServer(server);
+            const config = await window.electronAPI.vpn.getConfig();
+            setVpnConfig(config);
+            setVpnConfigInput(config.raw || '');
 
             const mode = await window.electronAPI.vpn.isModeEnabled();
             setVpnMode(mode);
@@ -199,8 +202,8 @@ export function SettingsModal({
           setIsVpnConnecting(false);
         });
 
-        const unsubscribeFailed = window.electronAPI.vpn.onConnectionFailed((error: string) => {
-          alert(`VPN Connection Failed: ${error}`);
+        const unsubscribeFailed = window.electronAPI.vpn.onConnectionFailed((errMsg: string) => {
+          error(`VPN Connection Failed: ${errMsg}`);
           setIsVpnConnecting(false);
         });
 
@@ -212,9 +215,39 @@ export function SettingsModal({
     }
   }, [isOpen]);
 
+  const handleVpnImportConfig = async () => {
+    if (!vpnConfigInput.trim()) {
+      setVpnConfigError('Please paste your WireGuard configuration.');
+      return;
+    }
+    setVpnConfigError('');
+    try {
+      const result = await window.electronAPI.vpn.importConfig(vpnConfigInput.trim());
+      if (result.success && result.config) {
+        setVpnConfig({ raw: vpnConfigInput.trim(), parsed: result.config });
+        setVpnConfigError('');
+      } else {
+        setVpnConfigError(result.error || 'Invalid WireGuard configuration.');
+      }
+    } catch (err) {
+      setVpnConfigError('Failed to import config. Please check the format.');
+    }
+  };
+
+  const handleVpnClearConfig = async () => {
+    if (vpnStatus.connected) {
+      warning('Disconnect from VPN before clearing the config.');
+      return;
+    }
+    await window.electronAPI.vpn.clearConfig();
+    setVpnConfig({ raw: '', parsed: null });
+    setVpnConfigInput('');
+    setVpnConfigError('');
+  };
+
   const handleVpnConnect = async () => {
-    if (!selectedServer) {
-      alert('Please select a server location first.');
+    if (!vpnConfig.parsed) {
+      warning('Please import a WireGuard configuration first.');
       return;
     }
     setIsVpnConnecting(true);
@@ -228,14 +261,6 @@ export function SettingsModal({
     setIsVpnConnecting(true);
     await window.electronAPI.vpn.disconnect();
     setIsVpnConnecting(false);
-  };
-
-  const handleSelectServer = async (countryCode: string) => {
-    if (window.electronAPI.vpn) {
-      await window.electronAPI.vpn.setServer(countryCode);
-      const server = await window.electronAPI.vpn.getSelectedServer();
-      setSelectedServer(server);
-    }
   };
 
   const handleToggleVpnMode = async (val: boolean) => {
@@ -433,7 +458,7 @@ export function SettingsModal({
       setIsEditingKey(false);
       loadSecuritySettings();
     } catch (err) {
-      alert('Failed to save API Key');
+      error('Failed to save API Key');
     }
   };
 
@@ -444,6 +469,24 @@ export function SettingsModal({
     } catch (err) {
       console.error('Failed to load extensions:', err);
     }
+  };
+
+  const loadAccounts = () => {
+    const loadedAccounts: Account[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const name = localStorage.getItem(`gemini-browser-profile-name-${i}`);
+      const email = localStorage.getItem(`gemini-browser-profile-email-${i}`);
+      const isActive = localStorage.getItem('gemini-browser-active-profile-id') === String(i);
+      if (name || email) {
+        loadedAccounts.push({
+          id: i,
+          name: name || `Profile ${i}`,
+          email: email || `profile${i}@icrushbrowser.com`,
+          active: isActive,
+        });
+      }
+    }
+    setAccounts(loadedAccounts);
   };
 
   const handleAddBridge = async () => {
@@ -465,7 +508,7 @@ export function SettingsModal({
       setNewBridgeCert('');
       setNewBridgeIatMode(0);
     } catch (err) {
-      alert('Failed to add bridge');
+      error('Failed to add bridge');
     }
   };
 
@@ -474,7 +517,7 @@ export function SettingsModal({
       await window.electronAPI.tor.removeBridge(address);
       loadBridges();
     } catch (err) {
-      alert('Failed to remove bridge');
+      error('Failed to remove bridge');
     }
   };
 
@@ -483,7 +526,7 @@ export function SettingsModal({
     try {
       await window.electronAPI.tor.setBridgeType(type);
     } catch (err) {
-      alert('Failed to set bridge type');
+      error('Failed to set bridge type');
     }
   };
 
@@ -492,7 +535,7 @@ export function SettingsModal({
     try {
       await window.electronAPI.tor.setUseBridges(enabled);
     } catch (err) {
-      alert('Failed to set bridge mode');
+      error('Failed to set bridge mode');
     }
   };
 
@@ -501,8 +544,68 @@ export function SettingsModal({
       setActiveTab(initialTab);
       loadExtensions();
       loadSecuritySettings();
+      loadAccounts();
     }
   }, [isOpen, initialTab]);
+
+  const [updaterState, setUpdaterState] = useState<{
+    status: string;
+    enabled?: boolean;
+    appVersion?: string;
+    version?: string;
+    progress?: number;
+    error?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const api = window.electronAPI?.updater;
+    if (!api) return;
+    let cancelled = false;
+    api.getState().then(s => {
+      if (!cancelled) setUpdaterState(s);
+    }).catch(() => {
+      // update service unreachable; card shows fallback text
+    });
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = api.onStatus(s => {
+        if (!cancelled) setUpdaterState(s);
+      });
+    } catch {
+      // live updates unavailable; manual refresh still works
+    }
+    return () => {
+      cancelled = true;
+      try {
+        unsubscribe?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, [isOpen]);
+
+  const describeUpdater = (): string => {
+    if (!updaterState) return 'Update service unavailable in this runtime.';
+    switch (updaterState.status) {
+      case 'checking':
+        return 'Checking for updates…';
+      case 'available':
+        return `Update available${updaterState.version ? `: v${updaterState.version}` : ''} — downloading.`;
+      case 'downloading':
+        return `Downloading update… ${updaterState.progress ?? 0}%`;
+      case 'downloaded':
+        return `Version ${updaterState.version ?? ''} ready — restart to install.`;
+      case 'up-to-date':
+        return 'You are on the latest version.';
+      case 'unavailable':
+        return updaterState.error ?? 'Automatic updates are unavailable in this build.';
+      case 'error':
+        return `Update check failed: ${updaterState.error ?? 'unknown error'}`;
+      default:
+        return `Current version: ${updaterState.appVersion ?? '1.0.0'}`;
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -599,7 +702,7 @@ export function SettingsModal({
   const handleSaveEditor = () => {
     if (editorImageSrc) {
       localStorage.setItem('gemini-browser-profile-pic', editorImageSrc);
-      alert('Avatar saved successfully!');
+      success('Avatar saved successfully!');
       setShowProfileEditor(false);
       window.location.reload();
     }
@@ -614,7 +717,7 @@ export function SettingsModal({
         window.dispatchEvent(new Event('extensions-modified'));
       }
     } catch (err) {
-      alert('Failed to load extension: ' + (err instanceof Error ? err.message : String(err)));
+      error('Failed to load extension: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -624,7 +727,7 @@ export function SettingsModal({
       await loadExtensions();
       window.dispatchEvent(new Event('extensions-modified'));
     } catch (err) {
-      alert('Failed to toggle extension: ' + (err instanceof Error ? err.message : String(err)));
+      error('Failed to toggle extension: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -634,7 +737,7 @@ export function SettingsModal({
       await loadExtensions();
       window.dispatchEvent(new Event('extensions-modified'));
     } catch (err) {
-      alert('Failed to remove extension: ' + (err instanceof Error ? err.message : String(err)));
+      error('Failed to remove extension: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -647,7 +750,7 @@ export function SettingsModal({
       await loadExtensions();
       window.dispatchEvent(new Event('extensions-modified'));
     } catch (err) {
-      alert('Failed to install extension: ' + (err instanceof Error ? err.message : String(err)));
+      error('Failed to install extension: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsInstallingExt(false);
     }
@@ -1175,6 +1278,8 @@ export function SettingsModal({
                         value={profileName}
                         onChange={e => {
                           setProfileName(e.target.value);
+                          const id = localStorage.getItem('gemini-browser-active-profile-id') || '1';
+                          localStorage.setItem(`gemini-browser-profile-name-${id}`, e.target.value);
                           localStorage.setItem('gemini-browser-profile-name', e.target.value);
                         }}
                         style={{
@@ -1198,6 +1303,8 @@ export function SettingsModal({
                         value={profileEmail}
                         onChange={e => {
                           setProfileEmail(e.target.value);
+                          const id = localStorage.getItem('gemini-browser-active-profile-id') || '1';
+                          localStorage.setItem(`gemini-browser-profile-email-${id}`, e.target.value);
                           localStorage.setItem('gemini-browser-profile-email', e.target.value);
                         }}
                         style={{
@@ -1254,6 +1361,8 @@ export function SettingsModal({
                       { state: syncHistory, setter: setSyncHistory, key: 'sync_history', label: 'Browsing Timeline & History' },
                       { state: syncPass, setter: setSyncPass, key: 'sync_passwords', label: 'Saved Passwords & Credentials' },
                       { state: syncAI, setter: setSyncAI, key: 'sync_ai', label: 'AI Studio Chats & Custom Personas' },
+                      { state: syncExtensions, setter: setSyncExtensions, key: 'sync_extensions', label: 'Installed Extensions & Settings' },
+                      { state: syncSettings, setter: setSyncSettings, key: 'sync_settings', label: 'Browser Preferences & Configuration' },
                     ].map(item => (
                       <label
                         key={item.key}
@@ -1286,7 +1395,7 @@ export function SettingsModal({
                       type="button"
                       onClick={() => {
                         window.dispatchEvent(new Event('trigger-manual-sync'));
-                        alert('Manual cloud synchronization triggered.');
+                        info('Manual cloud synchronization triggered.');
                       }}
                       style={{
                         padding: '8px 14px',
@@ -2095,6 +2204,24 @@ export function SettingsModal({
                                 onChange={e => {
                                   w.setter(e.target.checked);
                                   localStorage.setItem(w.key, String(e.target.checked));
+                                  // Also sync to homescreen-widgets JSON so the homescreen reads it
+                                  const widgetsKey = 'homescreen-widgets';
+                                  try {
+                                    const stored = JSON.parse(localStorage.getItem(widgetsKey) || '{}');
+                                    // Map widget_show_* keys to homescreen widget names
+                                    const nameMap: Record<string, string> = {
+                                      widget_show_weather: 'Weather',
+                                      widget_show_shortcuts: 'Quick Links',
+                                      widget_show_vitals: 'System Monitor',
+                                      widget_show_stocks: 'News',
+                                      widget_show_notes: 'Notes',
+                                    };
+                                    const widgetName = nameMap[w.key];
+                                    if (widgetName) {
+                                      stored[widgetName] = e.target.checked;
+                                      localStorage.setItem(widgetsKey, JSON.stringify(stored));
+                                    }
+                                  } catch { /* ignore */ }
                                   window.dispatchEvent(new Event('widgets-updated'));
                                 }}
                               />
@@ -3040,6 +3167,48 @@ export function SettingsModal({
                     </label>
                   </div>
 
+                  {/* Tor Cloud AI Routing Toggle */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 0',
+                      borderTop: '1px solid var(--border-light)',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', display: 'block' }}>
+                        Route AI Requests Through Tor
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                        Send cloud AI prompts via the Tor network for maximum privacy
+                      </span>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginTop: '2px' }}>
+                      <input
+                        type="checkbox"
+                        checked={torCloudRouting}
+                        onChange={e => {
+                          setTorCloudRouting(e.target.checked);
+                          localStorage.setItem('torCloudRouting', String(e.target.checked));
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                      <div style={{
+                        width: '32px', height: '18px', borderRadius: '9px',
+                        background: torCloudRouting ? 'var(--color-primary)' : 'rgba(255,255,255,0.1)',
+                        position: 'relative', transition: 'background 200ms',
+                      }}>
+                        <div style={{
+                          width: '14px', height: '14px', borderRadius: '50%', background: '#fff',
+                          position: 'absolute', top: '2px',
+                          left: torCloudRouting ? '16px' : '2px', transition: 'left 200ms',
+                        }} />
+                      </div>
+                    </label>
+                  </div>
+
                   {/* Bridge List */}
                   {bridges.length > 0 && (
                     <div className="bridge-list" style={{ marginTop: '16px' }}>
@@ -3380,15 +3549,15 @@ export function SettingsModal({
                         </div>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                           {vpnStatus.connected
-                            ? `Connected to ${vpnStatus.countryName || 'Global Endpoint'} • WireGuard ChaCha20-Poly1305`
-                            : 'Direct connection. Select a secure endpoint to mask your IP and encrypt web traffic.'}
+                            ? `Connected to ${vpnStatus.serverName || 'VPN'} • WireGuard ChaCha20-Poly1305`
+                            : 'Direct connection. Import a WireGuard config to encrypt your traffic.'}
                         </span>
                       </div>
                     </div>
 
                     <button
                       onClick={vpnStatus.connected ? handleVpnDisconnect : handleVpnConnect}
-                      disabled={isVpnConnecting || (!vpnStatus.connected && !selectedServer)}
+                      disabled={isVpnConnecting || (!vpnStatus.connected && !vpnConfig.parsed)}
                       style={{
                         padding: '10px 24px',
                         fontSize: '12.5px',
@@ -3453,94 +3622,115 @@ export function SettingsModal({
                     </div>
                   </div>
 
-                  {/* Global Server Location Matrix */}
+                  {/* WireGuard Config Importer (BYOC) */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                        Global WireGuard Server Endpoints
+                        WireGuard Configuration
                       </h4>
-                      <input
-                        type="text"
-                        placeholder="Search locations..."
-                        value={serverSearchQuery}
-                        onChange={e => setServerSearchQuery(e.target.value)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border-light)',
-                          background: 'var(--bg-deep)',
-                          color: 'var(--text-primary)',
-                          fontSize: '11.5px',
-                          outline: 'none',
-                          width: '180px',
-                        }}
-                      />
+                      {vpnConfig.parsed && (
+                        <button
+                          onClick={handleVpnClearConfig}
+                          disabled={vpnStatus.connected}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            color: '#f87171',
+                            cursor: vpnStatus.connected ? 'not-allowed' : 'pointer',
+                            opacity: vpnStatus.connected ? 0.5 : 1,
+                          }}
+                        >
+                          Clear Config
+                        </button>
+                      )}
                     </div>
 
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '10px',
-                        maxHeight: '200px',
-                        overflowY: 'auto',
-                      }}
-                      className="no-scrollbar"
-                    >
-                      {(vpnServers.length > 0 ? vpnServers : [
-                        { countryCode: 'us-east', countryName: 'United States (Virginia)', flag: '🇺🇸', ping: 32 },
-                        { countryCode: 'us-west', countryName: 'United States (Oregon)', flag: '🇺🇸', ping: 45 },
-                        { countryCode: 'de', countryName: 'Germany (Frankfurt)', flag: '🇩🇪', ping: 22 },
-                        { countryCode: 'ch', countryName: 'Switzerland (Zurich)', flag: '🇨🇭', ping: 26 },
-                        { countryCode: 'jp', countryName: 'Japan (Tokyo)', flag: '🇯🇵', ping: 88 },
-                        { countryCode: 'gb', countryName: 'United Kingdom (London)', flag: '🇬🇧', ping: 29 },
-                        { countryCode: 'sg', countryName: 'Singapore', flag: '🇸🇬', ping: 110 },
-                        { countryCode: 'nl', countryName: 'Netherlands (Amsterdam)', flag: '🇳🇱', ping: 24 },
-                      ])
-                        .filter(s => !serverSearchQuery || s.countryName.toLowerCase().includes(serverSearchQuery.toLowerCase()))
-                        .map(server => {
-                          const isSelected = selectedServer?.countryCode === server.countryCode;
-                          return (
-                            <div
-                              key={server.countryCode}
-                              onClick={() => !vpnStatus.connected && handleSelectServer(server.countryCode)}
-                              style={{
-                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-deep)',
-                                border: isSelected
-                                  ? '1px solid rgba(99, 102, 241, 0.5)'
-                                  : '1px solid var(--border-light)',
-                                borderRadius: '10px',
-                                padding: '12px 14px',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                cursor: vpnStatus.connected ? 'not-allowed' : 'pointer',
-                                opacity: vpnStatus.connected && !isSelected ? 0.5 : 1,
-                                transition: 'all 0.15s ease',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontSize: '18px' }}>{server.flag}</span>
-                                <div>
-                                  <span style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-primary)', display: 'block' }}>
-                                    {server.countryName}
-                                  </span>
-                                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>WireGuard 51820</span>
-                                </div>
-                              </div>
+                    {!vpnConfig.parsed ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{
+                          padding: '14px',
+                          borderRadius: '10px',
+                          background: 'rgba(99, 102, 241, 0.08)',
+                          border: '1px solid rgba(99, 102, 241, 0.2)',
+                        }}>
+                          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-primary)', fontWeight: '600', lineHeight: '1.5' }}>
+                            ICRUSH Browser does not provide VPN servers. You need your own WireGuard configuration to use the VPN feature.
+                          </p>
+                          <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                            Get a WireGuard config from: Mullvad, ProtonVPN, IVPN, Windscribe, or self-host your own VPN server on a VPS (Hetzner, DigitalOcean, etc.).
+                          </p>
+                        </div>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '11px', color: '#22c55e', fontWeight: '700', fontFamily: 'monospace' }}>
-                                  {server.ping}ms
-                                </span>
-                                {isSelected && (
-                                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-primary)' }} />
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
+                        <textarea
+                          value={vpnConfigInput}
+                          onChange={e => { setVpnConfigInput(e.target.value); setVpnConfigError(''); }}
+                          placeholder={`[Interface]\nPrivateKey = your-private-key\nAddress = 10.x.x.x/32\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = server-public-key\nEndpoint = vpn.example.com:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 25`}
+                          disabled={vpnStatus.connected}
+                          style={{
+                            width: '100%',
+                            minHeight: '160px',
+                            padding: '12px',
+                            borderRadius: '8px',
+                            border: vpnConfigError ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid var(--border-light)',
+                            background: 'var(--bg-deep)',
+                            color: 'var(--text-primary)',
+                            fontSize: '11.5px',
+                            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                            outline: 'none',
+                            resize: 'vertical',
+                            lineHeight: '1.5',
+                          }}
+                        />
+
+                        {vpnConfigError && (
+                          <span style={{ fontSize: '11px', color: '#f87171', fontWeight: '500' }}>
+                            {vpnConfigError}
+                          </span>
+                        )}
+
+                        <button
+                          onClick={handleVpnImportConfig}
+                          disabled={vpnStatus.connected || !vpnConfigInput.trim()}
+                          style={{
+                            padding: '8px 16px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: vpnConfigInput.trim() ? 'var(--color-primary, #6366f1)' : 'var(--bg-deep)',
+                            color: vpnConfigInput.trim() ? '#ffffff' : 'var(--text-muted)',
+                            cursor: vpnConfigInput.trim() ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Import Configuration
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        padding: '14px',
+                        borderRadius: '10px',
+                        background: 'rgba(34, 197, 94, 0.06)',
+                        border: '1px solid rgba(34, 197, 94, 0.2)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>Configuration Imported</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <span>Endpoint: <strong style={{ color: 'var(--text-primary)' }}>{vpnConfig.parsed?.peers[0]?.endpoint || '—'}</strong></span>
+                          <span>Allowed IPs: <strong style={{ color: 'var(--text-primary)' }}>{vpnConfig.parsed?.peers[0]?.allowedIps || '—'}</strong></span>
+                          <span>DNS: <strong style={{ color: 'var(--text-primary)' }}>{vpnConfig.parsed?.dns?.join(', ') || '—'}</strong></span>
+                          <span>Peers: <strong style={{ color: 'var(--text-primary)' }}>{vpnConfig.parsed?.peers?.length || 0}</strong></span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Network Shields & Protocol Controls */}
@@ -3591,6 +3781,21 @@ export function SettingsModal({
                         }}
                       />
                     </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-deep)', border: '1px solid var(--border-light)', cursor: 'pointer' }}>
+                      <div>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Split Tunneling</span>
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>Route only browser traffic through VPN while other apps use your direct connection.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={vpnSplitTunnel}
+                        onChange={e => {
+                          setVpnSplitTunnel(e.target.checked);
+                          localStorage.setItem('vpn_split_tunnel', String(e.target.checked));
+                        }}
+                      />
+                    </label>
                   </div>
                 </div>
               </div>
@@ -3633,6 +3838,69 @@ export function SettingsModal({
                   </div>
                 </div>
 
+                {/* Application Updates */}
+                <div
+                  style={{
+                    padding: '18px',
+                    borderRadius: '14px',
+                    background: 'var(--bg-deep)',
+                    border: '1px solid var(--border-light)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                  }}
+                >
+                  <span style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-primary)' }}>
+                    Application Updates
+                  </span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{describeUpdater()}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="pm-btn pm-btn-secondary pm-btn-sm"
+                      disabled={updaterState?.status === 'checking' || updaterState?.status === 'downloading'}
+                      onClick={() => {
+                        const api = window.electronAPI?.updater;
+                        if (!api) return;
+                        api.check().then(s => setUpdaterState(s)).catch(() => {
+                          // check failure surfaces through status polling text
+                        });
+                      }}
+                    >
+                      Check for updates
+                    </button>
+                    {updaterState?.status === 'downloaded' && (
+                      <button
+                        type="button"
+                        className="pm-btn pm-btn-primary pm-btn-sm"
+                        onClick={() => {
+                          try {
+                            void window.electronAPI?.updater?.quitAndInstall();
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                      >
+                        Restart & install
+                      </button>
+                    )}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={updaterState?.enabled ?? true}
+                        onChange={e => {
+                          const api = window.electronAPI?.updater;
+                          if (!api) return;
+                          api.setEnabled(e.target.checked).then(s => setUpdaterState(s)).catch(() => {
+                            // toggle failure keeps previous state
+                          });
+                        }}
+                      />
+                      Automatic update checks
+                    </label>
+                  </div>
+                </div>
+
                 {/* Founder & Organization Deck */}
                 <div
                   style={{
@@ -3656,7 +3924,7 @@ export function SettingsModal({
                       Founder & Lead Architect
                     </span>
                     <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                      Nightmare (Amit)
+                      NIGHTMARE
                     </span>
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       Systems Thinking, Core Engine Design & Operational Invariants

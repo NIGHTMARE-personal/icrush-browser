@@ -2,7 +2,7 @@ import { app, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import type { EncryptedMemoryEntry, VaultStats } from '../src/types/agent-contracts';
+import type { EncryptedMemoryEntry, VaultStats } from '../shared/agent-contracts';
 
 /**
  * Encrypted Agent Memory Vault (AES-256 / DPAPI at Rest)
@@ -20,8 +20,19 @@ class AgentMemoryVault {
   }
 
   private getFallbackKey(): Buffer {
-    const machineId = `${process.env.COMPUTERNAME || 'host'}-${process.env.USERNAME || 'user'}-icrush-vault`;
-    return crypto.pbkdf2Sync(machineId, 'icrush-salt-v1', 100000, 32, 'sha256');
+    // SECURITY: Use a random key stored on disk instead of predictable env vars
+    const keyPath = path.join(app.getPath('userData'), '.vault-key');
+    try {
+      if (fs.existsSync(keyPath)) {
+        return Buffer.from(fs.readFileSync(keyPath, 'hex'));
+      }
+    } catch { /* fall through to generate new key */ }
+    // Generate a new random key and save it
+    const key = crypto.randomBytes(32);
+    try {
+      fs.writeFileSync(keyPath, key.toString('hex'), { mode: 0o600 });
+    } catch { /* best effort — will regenerate next time */ }
+    return key;
   }
 
   private encrypt(plainText: string): string {

@@ -3,6 +3,10 @@ const SEARCH_ENGINES = {
   bing: 'https://www.bing.com/search?q=',
   duckduckgo: 'https://duckduckgo.com/?q=',
   brave: 'https://search.brave.com/search?q=',
+  kagi: 'https://kagi.com/search?q=',
+  perplexity: 'https://www.perplexity.ai/search?q=',
+  startpage: 'https://www.startpage.com/do/search?q=',
+  ecosia: 'https://www.ecosia.org/search?q=',
 } as const;
 
 // Common sites that should be navigated to directly, not searched
@@ -132,6 +136,10 @@ export function normalizeUrl(input: string, searchEngine: SearchEngineKey = 'goo
   if (isOnionAddress(cleanInput)) {
     return ensureOnionUrl(cleanInput);
   }
+
+  // Check if it's a known site name (single word like "reddit", "youtube", etc.)
+  const lower = cleanInput.toLowerCase();
+  if (COMMON_SITES[lower]) return COMMON_SITES[lower];
 
   // If it's a search query, wrap in the selected search engine query URL
   if (isSearchQuery(cleanInput)) {

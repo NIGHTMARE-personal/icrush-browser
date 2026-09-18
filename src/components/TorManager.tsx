@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CircuitVisualization } from './CircuitVisualization';
+import { useToast } from './Toast';
 
 interface BridgeConfig {
   type: 'obfs4' | 'snowflake' | 'meek';
@@ -67,6 +68,7 @@ const parseBridgeLine = (line: string): BridgeConfig | null => {
 };
 
 export function TorManager({ isOpen, onClose, onToggleTorMode, ..._props }: TorManagerProps) {
+  const { success, error, warning, info } = useToast();
   const [status, setStatus] = useState<TorStatus>({
     connected: false,
     ip: '',
@@ -447,6 +449,30 @@ export function TorManager({ isOpen, onClose, onToggleTorMode, ..._props }: TorM
                         Using default obfs4 relays.
                       </div>
                     )}
+
+                    <button
+                      className="tor-pill-btn tor-pill-btn-secondary"
+                      style={{ marginTop: 8, fontSize: 11 }}
+                      onClick={async () => {
+                        const type = (status.bridgeType || 'obfs4') as 'obfs4' | 'snowflake';
+                        try {
+                          const fresh = await window.electronAPI.tor.fetchBridges(type);
+                          if (fresh.length > 0) {
+                            for (const b of fresh) {
+                              await window.electronAPI.tor.addBridge({ ...b, type } as BridgeConfig);
+                            }
+                            success(`Added ${fresh.length} fresh ${type} bridges`);
+                          } else {
+                            warning('No fresh bridges available — try again later');
+                          }
+                        } catch (err) {
+                          console.warn('Bridge fetch failed:', err);
+                          error('Failed to fetch fresh bridges');
+                        }
+                      }}
+                    >
+                      Fetch Fresh Bridges from Tor Project
+                    </button>
 
                     <form className="tor-add-bridge-form" onSubmit={handleAddBridge}>
                       <input

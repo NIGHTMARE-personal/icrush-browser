@@ -6,10 +6,10 @@
     "allowImportingTsExtensions": false,
     "esModuleInterop": true,
     "outDir": "./main",
-    "rootDir": "./",
+    "rootDir": ".",
     "declaration": false,
     "noEmit": false
   },
-  "include": ["main/**/*", "src/types/**/*"],
+  "include": ["main/**/*", "shared/**/*"],
   "exclude": ["node_modules", "dist"]
 }

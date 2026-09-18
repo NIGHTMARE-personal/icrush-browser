@@ -1,6 +1,26 @@
 // import '@testing-library/jest-dom';
 import { vi, beforeAll, afterAll } from 'vitest';
 
+// Mock electron for main process modules that need it
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => '/tmp/test-userdata',
+    isPackaged: false,
+  },
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: (s: string) => Buffer.from(s),
+    decryptString: (b: Buffer) => b.toString(),
+  },
+  ipcMain: { handle: vi.fn(), on: vi.fn() },
+  BrowserWindow: { getFocusedWindow: vi.fn() },
+  dialog: { showMessageBox: vi.fn() },
+  session: { defaultSession: { webRequest: { onBeforeSendHeaders: vi.fn(), onHeadersReceived: vi.fn() } } },
+  Menu: { setApplicationMenu: vi.fn() },
+  shell: { openExternal: vi.fn() },
+  webContents: { getAllWebContents: vi.fn(() => []) },
+}));
+
 // Mock electronAPI for tests
 const mockElectronAPI = {
   sendGeminiMessage: vi.fn(),

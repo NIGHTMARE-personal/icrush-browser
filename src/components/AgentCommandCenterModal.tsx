@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AgentAuditTab } from './AgentAuditTab';
 
 interface Skill {
   id: string;
@@ -120,12 +121,21 @@ const IconClose = () => (
   </svg>
 );
 
+const IconLedger = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 6h13M8 12h13M8 18h13" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
+
 export function AgentCommandCenterModal({
   isOpen,
   onClose,
   onRunSkillGoal,
 }: AgentCommandCenterModalProps) {
-  const [activeTab, setActiveTab] = useState<'skills' | 'memory' | 'mcp' | 'subagents' | 'scheduler'>('skills');
+  const [activeTab, setActiveTab] = useState<'skills' | 'memory' | 'mcp' | 'subagents' | 'scheduler' | 'audit'>('skills');
 
   // Skills State
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -434,6 +444,7 @@ export function AgentCommandCenterModal({
             { id: 'mcp', label: 'MCP Connectors', icon: <IconCpu /> },
             { id: 'subagents', label: 'Worker Pool', icon: <IconLayers /> },
             { id: 'scheduler', label: 'Task Scheduler', icon: <IconClock /> },
+            { id: 'audit', label: 'Permissions & Audit', icon: <IconLedger /> },
           ].map(tab => (
             <button
               key={tab.id}
@@ -945,6 +956,22 @@ export function AgentCommandCenterModal({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* TAB 6: PERMISSIONS & AUDIT */}
+          {activeTab === 'audit' && (
+            <div>
+              <div style={{ marginBottom: '18px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.01em', margin: 0 }}>
+                  Permission Tiers & Audit Ledger
+                </h3>
+                <div style={{ fontSize: '12px', color: '#71717a', marginTop: '2px' }}>
+                  Least-privilege tiers (read &lt; navigate &lt; interact &lt; sensitive) with per-site ceilings and
+                  an append-only trail of every gated action.
+                </div>
+              </div>
+              <AgentAuditTab />
             </div>
           )}
 

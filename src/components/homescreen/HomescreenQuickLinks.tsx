@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PromptModal } from '../PromptModal';
 
 interface QuickLink {
   name: string;
@@ -49,6 +50,29 @@ export function HomescreenQuickLinks({ onNavigate, onCreateTab }: HomescreenQuic
   const [links, setLinks] = useState<QuickLink[]>(DEFAULT_LINKS);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; link: QuickLink } | null>(null);
   const [failingFavicons, setFailingFavicons] = useState<Set<string>>(new Set());
+  const [addPromptOpen, setAddPromptOpen] = useState(false);
+  const [addPromptValue, setAddPromptValue] = useState('');
+
+  const handleAddPromptConfirm = useCallback((url: string) => {
+    let finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      finalUrl = 'https://' + url;
+    }
+    const name = getDomain(finalUrl);
+    setLinks(prev => {
+      if (prev.some(l => l.url === finalUrl)) return prev;
+      return [...prev, { name, url: finalUrl }];
+    });
+  }, []);
+
+  const handleAdd = useCallback(() => {
+    setAddPromptValue('');
+    setAddPromptOpen(true);
+  }, []);
+
+  const handleAddPromptClose = useCallback(() => {
+    setAddPromptOpen(false);
+  }, []);
 
   useEffect(() => {
     const loadLinks = async () => {
@@ -138,21 +162,6 @@ export function HomescreenQuickLinks({ onNavigate, onCreateTab }: HomescreenQuic
     setContextMenu(null);
   }, [contextMenu]);
 
-  const handleAdd = useCallback(() => {
-    const url = prompt('Enter URL:');
-    if (url) {
-      let finalUrl = url;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        finalUrl = 'https://' + url;
-      }
-      const name = getDomain(finalUrl);
-      setLinks(prev => {
-        if (prev.some(l => l.url === finalUrl)) return prev;
-        return [...prev, { name, url: finalUrl }];
-      });
-    }
-  }, []);
-
   return (
     <div className="homescreen-quicklinks">
       <div className="quicklinks-row">
@@ -213,6 +222,16 @@ export function HomescreenQuickLinks({ onNavigate, onCreateTab }: HomescreenQuic
           </div>
         </div>
       )}
+      <PromptModal
+        isOpen={addPromptOpen}
+        onClose={handleAddPromptClose}
+        onConfirm={handleAddPromptConfirm}
+        title="Add Quick Link"
+        message="Enter the website URL to add to your quick links"
+        placeholder="https://example.com"
+        defaultValue={addPromptValue}
+        type="url"
+      />
     </div>
   );
 }

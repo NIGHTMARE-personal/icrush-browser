@@ -9,12 +9,19 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@main': path.resolve(__dirname, './main'),
     },
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'main/**/*.test.ts'],
+    server: {
+      deps: {
+        inline: [/main/],
+        fallbackCJS: true,
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

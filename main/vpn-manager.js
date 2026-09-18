@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -9,7 +42,6 @@ const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const child_process_1 = require("child_process");
-const crypto_1 = __importDefault(require("crypto"));
 class VPNManager {
     constructor() {
         Object.defineProperty(this, "vpnProcess", {
@@ -30,11 +62,9 @@ class VPNManager {
             writable: true,
             value: {
                 connected: false,
-                countryCode: '',
-                countryName: '',
+                serverName: '',
                 serverLatency: 0,
                 bandwidth: { up: 0, down: 0, total: 0 },
-                currentPlan: null,
                 interfaceName: '',
                 localIP: '',
                 endpointIP: '',
@@ -77,17 +107,17 @@ class VPNManager {
             writable: true,
             value: null
         });
-        Object.defineProperty(this, "connectionTimeout", {
+        Object.defineProperty(this, "currentInterfaceName", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: null
+            value: ''
         });
-        Object.defineProperty(this, "CONNECTION_TIMEOUT_MS", {
+        Object.defineProperty(this, "currentConfigPath", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 30000
+            value: ''
         });
         const userData = electron_1.app.getPath('userData');
         this.config = {
@@ -95,125 +125,126 @@ class VPNManager {
             configDir: path_1.default.join(userData, 'vpn', 'configs'),
             binDir: path_1.default.join(userData, 'vpn', 'bin'),
             wireguardPath: '',
-            servers: this.getDefaultServers(),
-            plans: this.getDefaultPlans(),
-            selectedServer: null,
-            selectedPlan: this.getDefaultPlans()[0],
+            importedConfig: null,
+            importedConfigRaw: '',
             connectionTimeout: 30000,
         };
+        this.loadSavedConfig();
     }
-    getDefaultServers() {
-        return [
-            {
-                countryCode: 'us',
-                countryName: 'United States',
-                flag: '\uD83C\uDDFA\uD83C\uDDF8',
-                endpoint: 'us.wireguard.example.com:51820',
-                publicKey: 'US_SERVER_PUBLIC_KEY_PLACEHOLDER',
-                allowedIps: '0.0.0.0/0',
-                dnsServers: ['1.1.1.1', '8.8.8.8'],
-                mtu: 1420,
-                persistentKeepalive: 25,
-                ping: 45,
-                uptime: 99.9,
-            },
-            {
-                countryCode: 'de',
-                countryName: 'Germany',
-                flag: '\uD83C\uDDE9\uD83C\uDDEA',
-                endpoint: 'de.wireguard.example.com:51820',
-                publicKey: 'DE_SERVER_PUBLIC_KEY_PLACEHOLDER',
-                allowedIps: '0.0.0.0/0',
-                dnsServers: ['1.1.1.1', '8.8.8.8'],
-                mtu: 1420,
-                persistentKeepalive: 25,
-                ping: 25,
-                uptime: 99.9,
-            },
-            {
-                countryCode: 'nl',
-                countryName: 'Netherlands',
-                flag: '\uD83C\uDDF3\uD83C\uDDF1',
-                endpoint: 'nl.wireguard.example.com:51820',
-                publicKey: 'NL_SERVER_PUBLIC_KEY_PLACEHOLDER',
-                allowedIps: '0.0.0.0/0',
-                dnsServers: ['1.1.1.1', '8.8.8.8'],
-                mtu: 1420,
-                persistentKeepalive: 25,
-                ping: 20,
-                uptime: 99.9,
-            },
-            {
-                countryCode: 'sg',
-                countryName: 'Singapore',
-                flag: '\uD83C\uDDF8\uD83C\uDDEC',
-                endpoint: 'sg.wireguard.example.com:51820',
-                publicKey: 'SG_SERVER_PUBLIC_KEY_PLACEHOLDER',
-                allowedIps: '0.0.0.0/0',
-                dnsServers: ['1.1.1.1', '8.8.8.8'],
-                mtu: 1420,
-                persistentKeepalive: 25,
-                ping: 180,
-                uptime: 99.5,
-            },
-            {
-                countryCode: 'jp',
-                countryName: 'Japan',
-                flag: '\uD83C\uDDEF\uD83C\uDDF5',
-                endpoint: 'jp.wireguard.example.com:51820',
-                publicKey: 'JP_SERVER_PUBLIC_KEY_PLACEHOLDER',
-                allowedIps: '0.0.0.0/0',
-                dnsServers: ['1.1.1.1', '8.8.8.8'],
-                mtu: 1420,
-                persistentKeepalive: 25,
-                ping: 160,
-                uptime: 99.5,
-            },
-            {
-                countryCode: 'ch',
-                countryName: 'Switzerland',
-                flag: '\uD83C\uDDE8\uD83C\uDDED',
-                endpoint: 'ch.wireguard.example.com:51820',
-                publicKey: 'CH_SERVER_PUBLIC_KEY_PLACEHOLDER',
-                allowedIps: '0.0.0.0/0',
-                dnsServers: ['1.1.1.1', '8.8.8.8'],
-                mtu: 1420,
-                persistentKeepalive: 25,
-                ping: 30,
-                uptime: 99.9,
-            },
-        ];
+    loadSavedConfig() {
+        try {
+            const configPath = path_1.default.join(this.config.dataDir, 'wg-config.conf');
+            const encPath = configPath + '.enc';
+            // Prefer encrypted config
+            if (fs_1.default.existsSync(encPath) && electron_1.safeStorage.isEncryptionAvailable()) {
+                const encrypted = fs_1.default.readFileSync(encPath);
+                const raw = electron_1.safeStorage.decryptString(encrypted);
+                this.config.importedConfigRaw = raw;
+                this.config.importedConfig = this.parseWireGuardConfig(raw);
+            }
+            else if (fs_1.default.existsSync(configPath)) {
+                // Legacy plaintext fallback
+                const raw = fs_1.default.readFileSync(configPath, 'utf-8');
+                this.config.importedConfigRaw = raw;
+                this.config.importedConfig = this.parseWireGuardConfig(raw);
+                // Re-encrypt on next save
+            }
+        }
+        catch (err) {
+            console.error('[VPN] Failed to load saved config:', err);
+        }
     }
-    getDefaultPlans() {
-        return [
-            {
-                id: 'free',
-                name: 'Free',
-                currency: 'USD',
-                price: 0,
-                period: 'daily',
-                dataLimit: 1024,
-                features: ['1GB/day', '3 locations', 'Standard speed'],
-            },
-            {
-                id: 'basic',
-                name: 'Basic',
-                currency: 'USD',
-                price: 4.99,
-                period: 'monthly',
-                dataLimit: 51200,
-                features: ['50GB/month', 'All locations', 'High speed', 'No logs'],
-            },
-            {
-                id: 'pro',
-                name: 'Pro',
-                currency: 'USD',
-                price: 9.99,
-                period: 'monthly',
-                dataLimit: 0,
-                features: ['Unlimited data', 'All locations', 'Max speed', 'No logs', 'Multi-hop'],
-            },
-        ];
+    saveConfig(raw) {
+        if (!fs_1.default.existsSync(this.config.dataDir)) {
+            fs_1.default.mkdirSync(this.config.dataDir, { recursive: true });
+        }
+        const configPath = path_1.default.join(this.config.dataDir, 'wg-config.conf');
+        // SECURITY: Encrypt WireGuard config (contains private key) before writing to disk
+        if (electron_1.safeStorage.isEncryptionAvailable()) {
+            const encrypted = electron_1.safeStorage.encryptString(raw);
+            fs_1.default.writeFileSync(configPath + '.enc', encrypted);
+            // Remove plaintext if it exists
+            if (fs_1.default.existsSync(configPath))
+                fs_1.default.unlinkSync(configPath);
+        }
+        else {
+            // Fallback: write plaintext but log warning
+            console.warn('[VPN] safeStorage unavailable — WireGuard config stored in plaintext!');
+            fs_1.default.writeFileSync(configPath, raw, 'utf-8');
+        }
+        this.config.importedConfigRaw = raw;
+        this.config.importedConfig = this.parseWireGuardConfig(raw);
+    }
+    parseWireGuardConfig(raw) {
+        const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+        const result = {
+            privateKey: '',
+            address: '',
+            dns: [],
+            mtu: 1420,
+            peers: [],
+        };
+        let currentSection = null;
+        let currentPeer = null;
+        for (const line of lines) {
+            const sectionMatch = line.match(/^\[(\w+)\]$/i);
+            if (sectionMatch) {
+                const section = sectionMatch[1].toLowerCase();
+                if (section === 'interface') {
+                    currentSection = 'interface';
+                    continue;
+                }
+                else if (section === 'peer') {
+                    currentSection = 'peer';
+                    if (currentPeer)
+                        result.peers.push(currentPeer);
+                    currentPeer = { publicKey: '', endpoint: '', allowedIps: '0.0.0.0/0', persistentKeepalive: 25 };
+                    continue;
+                }
+            }
+            const kvMatch = line.match(/^(\w+)\s*=\s*(.+)$/);
+            if (!kvMatch)
+                continue;
+            const [, key, value] = kvMatch;
+            const keyLower = key.toLowerCase();
+            if (currentSection === 'interface') {
+                switch (keyLower) {
+                    case 'privatekey':
+                        result.privateKey = value.trim();
+                        break;
+                    case 'address':
+                        result.address = value.trim();
+                        break;
+                    case 'dns':
+                        result.dns = value.split(',').map(d => d.trim()).filter(Boolean);
+                        break;
+                    case 'mtu':
+                        result.mtu = parseInt(value, 10) || 1420;
+                        break;
+                }
+            }
+            else if (currentSection === 'peer' && currentPeer) {
+                switch (keyLower) {
+                    case 'publickey':
+                        currentPeer.publicKey = value.trim();
+                        break;
+                    case 'endpoint':
+                        currentPeer.endpoint = value.trim();
+                        break;
+                    case 'allowedips':
+                        currentPeer.allowedIps = value.trim();
+                        break;
+                    case 'persistentkeepalive':
+                        currentPeer.persistentKeepalive = parseInt(value, 10) || 25;
+                        break;
+                }
+            }
+        }
+        if (currentPeer)
+            result.peers.push(currentPeer);
+        if (!result.privateKey || result.peers.length === 0)
+            return null;
+        return result;
     }
     setWindowGetter(getter) {
         this.windowGetter = getter;
@@ -250,43 +281,72 @@ class VPNManager {
         }
         throw new Error('WireGuard binary not found. Please install WireGuard and place binaries in bin/ directory.');
     }
-    async generateWireGuardConfig(server, partition) {
-        const configDir = this.config.configDir;
-        if (!fs_1.default.existsSync(configDir)) {
-            fs_1.default.mkdirSync(configDir, { recursive: true });
+    async importConfig(rawConfig) {
+        const parsed = this.parseWireGuardConfig(rawConfig);
+        if (!parsed) {
+            throw new Error('Invalid WireGuard config. Must contain [Interface] with PrivateKey and at least one [Peer] with PublicKey and Endpoint.');
         }
-        const privateKey = this.generatePrivateKey();
-        const localIP = this.generateLocalIP();
+        this.saveConfig(rawConfig);
+        return parsed;
+    }
+    getImportedConfig() {
+        return this.config.importedConfig;
+    }
+    getRawConfig() {
+        return this.config.importedConfigRaw;
+    }
+    getConfig() {
+        return {
+            raw: this.config.importedConfigRaw,
+            parsed: this.config.importedConfig,
+        };
+    }
+    clearConfig() {
+        this.config.importedConfig = null;
+        this.config.importedConfigRaw = '';
+        const configPath = path_1.default.join(this.config.dataDir, 'wg-config.conf');
+        if (fs_1.default.existsSync(configPath)) {
+            try {
+                fs_1.default.unlinkSync(configPath);
+            }
+            catch { /* ignore */ }
+        }
+    }
+    async writeConfigFile() {
+        const parsed = this.config.importedConfig;
+        if (!parsed)
+            throw new Error('No WireGuard config imported. Go to Settings → VPN and import a .conf file.');
+        if (!fs_1.default.existsSync(this.config.configDir)) {
+            fs_1.default.mkdirSync(this.config.configDir, { recursive: true });
+        }
         const config = `[Interface]
-PrivateKey = ${privateKey}
-Address = ${localIP}/24
-DNS = ${server.dnsServers.join(', ')}
-MTU = ${server.mtu}
+PrivateKey = ${parsed.privateKey}
+Address = ${parsed.address}
+DNS = ${parsed.dns.join(', ')}
+MTU = ${parsed.mtu}
 
-[Peer]
-PublicKey = ${server.publicKey}
-Endpoint = ${server.endpoint}
-AllowedIPs = ${server.allowedIps}
-PersistentKeepalive = ${server.persistentKeepalive}
+${parsed.peers.map(p => `[Peer]
+PublicKey = ${p.publicKey}
+Endpoint = ${p.endpoint}
+AllowedIPs = ${p.allowedIps}
+PersistentKeepalive = ${p.persistentKeepalive}`).join('\n\n')}
 `;
-        const configPath = path_1.default.join(configDir, `${partition}.conf`);
+        const partition = `vpn-${Date.now()}`;
+        const configPath = path_1.default.join(this.config.configDir, `${partition}.conf`);
         await fs_1.default.promises.writeFile(configPath, config);
         return configPath;
-    }
-    generatePrivateKey() {
-        return crypto_1.default.randomBytes(32).toString('base64');
-    }
-    generateLocalIP() {
-        const randomBytes = crypto_1.default.randomBytes(2);
-        const thirdOctet = (randomBytes[0] % 254) + 1;
-        const fourthOctet = (randomBytes[1] % 254) + 1;
-        return `10.${thirdOctet}.${fourthOctet}.1`;
     }
     async startWireGuard(configPath, partition) {
         const wgPath = this.config.wireguardPath;
         const interfaceName = `wg-${partition.replace(/[^a-zA-Z0-9]/g, '')}`;
+        this.currentInterfaceName = interfaceName;
         return new Promise((resolve, reject) => {
-            this.vpnProcess = (0, child_process_1.spawn)(wgPath, ['up', configPath, '--interface', interfaceName], {
+            const isWin = process.platform === 'win32';
+            const args = isWin
+                ? ['/installtunnelservice', configPath]
+                : ['up', configPath];
+            const cmd = isWin ? wgPath : 'wg-quick';
+            this.vpnProcess = (0, child_process_1.spawn)(cmd, args, {
                 stdio: ['ignore', 'pipe', 'pipe'],
             });
             this.vpnProcess.stdout?.on('data', (data) => {
@@ -298,8 +358,11 @@ PersistentKeepalive = ${server.persistentKeepalive}
             this.vpnProcess.on('error', (err) => {
                 console.error('WireGuard process error:', err);
                 if (!this.isShuttingDown) {
-                    this.emitConnectionFailed(err.message);
-                    reject(err);
+                    const msg = err.code === 'ENOENT'
+                        ? 'WireGuard binary not found. Install WireGuard and place wireguard.exe in the bin/ directory.'
+                        : `WireGuard error: ${err.message}`;
+                    this.emitConnectionFailed(msg);
+                    reject(new Error(msg));
                 }
             });
             this.vpnProcess.on('exit', (code) => {
@@ -311,24 +374,39 @@ PersistentKeepalive = ${server.persistentKeepalive}
                 }
                 else {
                     this.updateStatus({ connected: false });
-                    this.emitConnectionFailed(`WireGuard process exited with code ${code}`);
-                    reject(new Error(`WireGuard process exited with code ${code}`));
+                    const exitMessages = {
+                        1: 'WireGuard configuration error — check your imported config (keys, endpoint, etc.)',
+                        2: 'WireGuard binary not found or not executable',
+                        3: 'Network interface creation failed — try running as administrator',
+                        5: 'Permission denied — run as administrator',
+                    };
+                    const msg = exitMessages[code] || `WireGuard process exited with code ${code}`;
+                    this.emitConnectionFailed(msg);
+                    reject(new Error(msg));
                 }
             });
         }).then(async () => {
-            await new Promise((r) => setTimeout(r, 3000));
-            const handshake = await this.checkHandshake(interfaceName);
+            let handshake = false;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(r => setTimeout(r, 1000));
+                handshake = await this.checkHandshake(interfaceName);
+                if (handshake)
+                    break;
+            }
             if (handshake) {
+                const endpoint = this.config.importedConfig?.peers[0]?.endpoint || '';
+                const endpointHost = endpoint.split(':')[0] || '';
                 this.updateStatus({
                     connected: true,
                     interfaceName,
                     localIP: this.extractLocalIP(configPath),
-                    endpointIP: this.config.selectedServer?.endpoint.split(':')[0] || '',
+                    endpointIP: endpointHost,
+                    serverName: endpointHost,
                     lastHandshake: Date.now(),
                 });
             }
             else {
-                throw new Error('WireGuard handshake failed');
+                throw new Error('WireGuard handshake failed after 10 seconds');
             }
         });
     }
@@ -371,55 +449,22 @@ PersistentKeepalive = ${server.persistentKeepalive}
         return () => this.statusCallbacks.delete(cb);
     }
     getStatus() {
-        return {
-            ...this.status,
-            currentPlan: this.config.selectedPlan,
-        };
-    }
-    getServers() {
-        return this.config.servers;
-    }
-    getPlans() {
-        return this.config.plans;
-    }
-    getSelectedServer() {
-        return this.config.selectedServer;
-    }
-    getSelectedPlan() {
-        return this.config.selectedPlan;
-    }
-    async setServer(countryCode) {
-        const server = this.config.servers.find((s) => s.countryCode === countryCode);
-        if (server) {
-            this.config.selectedServer = server;
-            this.updateStatus({
-                countryCode: server.countryCode,
-                countryName: server.countryName,
-                serverLatency: server.ping,
-            });
-        }
-    }
-    async setPlan(planId) {
-        const plan = this.config.plans.find((p) => p.id === planId);
-        if (plan) {
-            this.config.selectedPlan = plan;
-            this.updateStatus({ currentPlan: plan });
-        }
+        return { ...this.status };
     }
     async connect() {
         try {
             this.isShuttingDown = false;
+            if (!this.config.importedConfig) {
+                throw new Error('No WireGuard config imported. Go to Settings → VPN and import a .conf file.');
+            }
             await this.ensureWireGuardBinary();
-            if (!this.config.selectedServer) {
-                throw new Error('No server selected. Please choose a country first.');
-            }
-            if (!this.config.selectedPlan) {
-                throw new Error('No plan selected.');
-            }
-            const partition = `vpn-${Date.now()}`;
-            const configPath = await this.generateWireGuardConfig(this.config.selectedServer, partition);
-            await this.startWireGuard(configPath, partition);
+            const configPath = await this.writeConfigFile();
+            this.currentConfigPath = configPath;
+            await this.startWireGuard(configPath, `vpn-${Date.now()}`);
             this.startStatusPolling();
+            if (this.killSwitchEnabled) {
+                this.applyKillSwitch();
+            }
             return true;
         }
         catch (err) {
@@ -434,11 +479,38 @@ PersistentKeepalive = ${server.persistentKeepalive}
             clearInterval(this.statusPollingInterval);
             this.statusPollingInterval = null;
         }
+        const wgPath = this.config.wireguardPath;
+        const interfaceName = this.currentInterfaceName || this.status.interfaceName;
+        if (interfaceName && wgPath && fs_1.default.existsSync(wgPath)) {
+            const isWin = process.platform === 'win32';
+            if (isWin) {
+                try {
+                    const cp = await Promise.resolve().then(() => __importStar(require('child_process')));
+                    cp.execFileSync(wgPath, ['/uninstalltunnelservice', interfaceName], { timeout: 5000 });
+                }
+                catch { /* tunnel may already be stopped */ }
+            }
+            else {
+                if (this.vpnProcess) {
+                    this.vpnProcess.kill('SIGTERM');
+                }
+            }
+        }
         if (this.vpnProcess) {
-            this.vpnProcess.kill('SIGTERM');
             this.vpnProcess = null;
         }
-        this.updateStatus({ connected: false, interfaceName: '', localIP: '', endpointIP: '' });
+        if (this.currentConfigPath && fs_1.default.existsSync(this.currentConfigPath)) {
+            try {
+                fs_1.default.unlinkSync(this.currentConfigPath);
+            }
+            catch { /* ignore */ }
+        }
+        if (this.killSwitchEnabled) {
+            this.removeKillSwitch();
+        }
+        this.currentInterfaceName = '';
+        this.currentConfigPath = '';
+        this.updateStatus({ connected: false, interfaceName: '', localIP: '', endpointIP: '', serverName: '' });
         return true;
     }
     startStatusPolling() {
@@ -464,22 +536,24 @@ PersistentKeepalive = ${server.persistentKeepalive}
                 output += data.toString();
             });
             proc.on('exit', () => {
-                const lines = output.trim().split('\n');
+                const lines = output.trim().split('\n').filter(Boolean);
+                let totalRx = 0;
+                let totalTx = 0;
                 for (const line of lines) {
-                    if (line.includes('received') || line.includes('sent')) {
-                        const parts = line.split(/\s+/);
-                        if (parts.length >= 3) {
-                            const received = parseInt(parts[1], 10) || 0;
-                            const sent = parseInt(parts[2], 10) || 0;
-                            this.updateStatus({
-                                bandwidth: {
-                                    up: sent,
-                                    down: received,
-                                    total: sent + received,
-                                },
-                            });
-                        }
+                    const parts = line.split(/\s+/);
+                    if (parts.length >= 3) {
+                        totalRx += parseInt(parts[1], 10) || 0;
+                        totalTx += parseInt(parts[2], 10) || 0;
                     }
+                }
+                if (totalRx > 0 || totalTx > 0) {
+                    this.updateStatus({
+                        bandwidth: {
+                            up: totalTx,
+                            down: totalRx,
+                            total: totalTx + totalRx,
+                        },
+                    });
                 }
             });
         }
@@ -498,6 +572,27 @@ PersistentKeepalive = ${server.persistentKeepalive}
     }
     setKillSwitch(enabled) {
         this.killSwitchEnabled = enabled;
+        if (enabled && this.status.connected) {
+            this.applyKillSwitch();
+        }
+        else if (!enabled) {
+            this.removeKillSwitch();
+        }
+    }
+    applyKillSwitch() {
+        electron_1.session.defaultSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+            if (this.killSwitchEnabled && !this.status.connected) {
+                callback({ cancel: true });
+            }
+            else {
+                callback({ cancel: false });
+            }
+        });
+    }
+    removeKillSwitch() {
+        electron_1.session.defaultSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (_details, callback) => {
+            callback({ cancel: false });
+        });
     }
     async shutdown() {
         await this.disconnect();

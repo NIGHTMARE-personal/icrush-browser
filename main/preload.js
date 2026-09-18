@@ -46,6 +46,16 @@ const electronAPI = {
         highlight: (selector, color, duration) => electron_1.ipcRenderer.invoke('agent:highlight', { selector, color, duration }),
         tooltip: (selector, text, color) => electron_1.ipcRenderer.invoke('agent:tooltip', { selector, text, color }),
         clickRipple: (x, y, color) => electron_1.ipcRenderer.invoke('agent:click-ripple', { x, y, color }),
+        getPolicy: () => electron_1.ipcRenderer.invoke('agent:get-policy'),
+        setSitePolicy: (policy) => electron_1.ipcRenderer.invoke('agent:set-site-policy', policy),
+        getAuditLog: () => electron_1.ipcRenderer.invoke('agent:get-audit-log'),
+        clearAuditLog: () => electron_1.ipcRenderer.invoke('agent:clear-audit-log'),
+        checkNavigation: (fromUrl, toUrl) => electron_1.ipcRenderer.invoke('agent:check-navigation', { fromUrl, toUrl }),
+        onAuditEvent: (callback) => {
+            const handler = (_event, event) => callback(event);
+            electron_1.ipcRenderer.on('agent:audit-event', handler);
+            return () => electron_1.ipcRenderer.off('agent:audit-event', handler);
+        },
     },
     mcp: {
         listTools: () => electron_1.ipcRenderer.invoke('mcp:list-tools'),
@@ -91,7 +101,11 @@ const electronAPI = {
         removeExtension: id => electron_1.ipcRenderer.invoke('extensions:remove', id),
         toggleExtension: (id, enabled) => electron_1.ipcRenderer.invoke('extensions:toggle', { id, enabled }),
         getExtensions: () => electron_1.ipcRenderer.invoke('extensions:get-all'),
-        installFromUrl: (url) => electron_1.ipcRenderer.invoke('extensions:install-from-url', url),
+        installFromUrl: (url, opts) => electron_1.ipcRenderer.invoke('extensions:install-from-url', url, opts),
+        analyzeUrl: (url) => electron_1.ipcRenderer.invoke('extensions:analyze-url', url),
+    },
+    news: {
+        fetchFeed: (category) => electron_1.ipcRenderer.invoke('news:fetch-feed', category),
     },
     downloads: {
         getAll: () => electron_1.ipcRenderer.invoke('downloads:get-all'),
@@ -165,6 +179,8 @@ const electronAPI = {
         // Onion utilities
         isOnionAddress: (url) => electron_1.ipcRenderer.invoke('tor:is-onion', url),
         ensureOnionUrl: (url) => electron_1.ipcRenderer.invoke('tor:ensure-onion-url', url),
+        fetchBridges: (transport) => electron_1.ipcRenderer.invoke('tor:fetch-bridges', transport),
+        syncBinaries: () => electron_1.ipcRenderer.invoke('tor:sync-binaries'),
         shouldUseTor: (url, torMode) => electron_1.ipcRenderer.invoke('tor:should-use-tor', url, torMode),
     },
     security: {
@@ -256,12 +272,9 @@ const electronAPI = {
     },
     vpn: {
         getStatus: () => electron_1.ipcRenderer.invoke('vpn:get-status'),
-        getServers: () => electron_1.ipcRenderer.invoke('vpn:get-servers'),
-        getPlans: () => electron_1.ipcRenderer.invoke('vpn:get-plans'),
-        getSelectedServer: () => electron_1.ipcRenderer.invoke('vpn:get-selected-server'),
-        getSelectedPlan: () => electron_1.ipcRenderer.invoke('vpn:get-selected-plan'),
-        setServer: (countryCode) => electron_1.ipcRenderer.invoke('vpn:set-server', countryCode),
-        setPlan: (planId) => electron_1.ipcRenderer.invoke('vpn:set-plan', planId),
+        importConfig: (rawConfig) => electron_1.ipcRenderer.invoke('vpn:import-config', rawConfig),
+        getConfig: () => electron_1.ipcRenderer.invoke('vpn:get-config'),
+        clearConfig: () => electron_1.ipcRenderer.invoke('vpn:clear-config'),
         connect: () => electron_1.ipcRenderer.invoke('vpn:connect'),
         disconnect: () => electron_1.ipcRenderer.invoke('vpn:disconnect'),
         isModeEnabled: () => electron_1.ipcRenderer.invoke('vpn:is-mode-enabled'),
@@ -312,6 +325,24 @@ const electronAPI = {
     apiKeys: {
         getAll: () => electron_1.ipcRenderer.invoke('api-keys:get-all'),
         setAll: (keys) => electron_1.ipcRenderer.invoke('api-keys:set-all', keys),
+    },
+    ollama: {
+        listModels: () => electron_1.ipcRenderer.invoke('ollama:list-models'),
+    },
+    tab: {
+        extractContent: (tabId) => electron_1.ipcRenderer.invoke('tab:extract-content', tabId),
+        extractAllContent: () => electron_1.ipcRenderer.invoke('tab:extract-all-content'),
+    },
+    updater: {
+        getState: () => electron_1.ipcRenderer.invoke('updater:get-state'),
+        check: () => electron_1.ipcRenderer.invoke('updater:check'),
+        setEnabled: (enabled) => electron_1.ipcRenderer.invoke('updater:set-enabled', enabled),
+        quitAndInstall: () => electron_1.ipcRenderer.invoke('updater:quit-and-install'),
+        onStatus: (callback) => {
+            const handler = (_event, state) => callback(state);
+            electron_1.ipcRenderer.on('updater:status', handler);
+            return () => electron_1.ipcRenderer.off('updater:status', handler);
+        },
     },
 };
 electron_1.contextBridge.exposeInMainWorld('electronAPI', electronAPI);

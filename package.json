@@ -8,10 +8,10 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5174 && electron .\"",
     "dev:clean": "cross-env PORT=5174 concurrently -k \"vite\" \"wait-on tcp:5174 && electron .\"",
-    "build:main": "tsc --project tsconfig.main.json",
+    "build:main": "tsc --project tsconfig.main.json && xcopy /Y /Q main\\main\\*.js main\\ >nul 2>&1 && xcopy /Y /Q main\\shared\\*.js main\\ >nul 2>&1 && rmdir /s /q main\\main 2>nul && rmdir /s /q main\\shared 2>nul",
     "build:vite": "tsc && vite build",
     "build:electron": "electron-builder",
-    "dist": "npm run build:vite && npm run build:electron",
+    "dist": "npm run build:main && npm run build:vite && npm run build:electron",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
     "typecheck": "tsc --noEmit",
@@ -85,17 +85,35 @@
         ]
       }
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "anomalyco",
+      "repo": "opencode"
+    },
     "win": {
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "artifactName": "${productName}-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ICRUSH Browser"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "artifactName": "${productName}-${version}.${ext}"
     }
   }
 }

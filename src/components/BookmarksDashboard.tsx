@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { bookmarkStorage, Bookmark, BookmarkFolder } from '../utils/bookmarks';
 import { ContextMenu, ContextMenuAction } from './ContextMenu';
+import { useToast } from './Toast';
 
 interface BookmarksDashboardProps {
   onNavigate: (url: string) => void;
@@ -8,6 +9,7 @@ interface BookmarksDashboardProps {
 }
 
 export function BookmarksDashboard({ onNavigate, onCreateTab }: BookmarksDashboardProps) {
+  const { success, error } = useToast();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [folders, setFolders] = useState<BookmarkFolder[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string>('all');
@@ -104,7 +106,7 @@ export function BookmarksDashboard({ onNavigate, onCreateTab }: BookmarksDashboa
     reader.onload = event => {
       const html = event.target?.result as string;
       const count = bookmarkStorage.importFromHTML(html);
-      alert(`Successfully imported ${count} bookmarks!`);
+      success(`Successfully imported ${count} bookmarks!`);
       loadData();
     };
     reader.readAsText(file);
@@ -155,7 +157,7 @@ export function BookmarksDashboard({ onNavigate, onCreateTab }: BookmarksDashboa
         onCreateTab(bm.url);
         break;
       case 'copyUrl':
-        navigator.clipboard.writeText(bm.url).catch(() => {});
+        navigator.clipboard.writeText(bm.url).then(() => success('URL copied')).catch(() => {});
         break;
       case 'editBookmark':
         handleStartEdit(bm);

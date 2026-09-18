@@ -9,6 +9,7 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const crypto_1 = __importDefault(require("crypto"));
 const keytar_1 = __importDefault(require("keytar"));
+const threat_feeds_1 = require("./threat-feeds");
 const SERVICE_NAME = 'GeminiBrowser';
 const VT_KEY_NAME = 'virustotal-api-key';
 // Local mock list of blocked regex patterns for testing Safe Browsing
@@ -27,7 +28,7 @@ const DANGEROUS_EXTENSIONS = [
     '.sh',
     '.scr',
     '.vbs',
-    '.js',
+    '',
     '.vbe',
     '.jse',
     '.wsf',
@@ -80,12 +81,27 @@ class SecurityManager {
             writable: true,
             value: void 0
         });
+        Object.defineProperty(this, "threatIndex", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: (0, threat_feeds_1.emptyThreatIndex)()
+        });
+        Object.defineProperty(this, "threatCachePath", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         this.configPath = path_1.default.join(electron_1.app.getPath('userData'), 'security-config.json');
         this.blocklistPath = path_1.default.join(electron_1.app.getPath('userData'), 'blocked-domains.json');
+        this.threatCachePath = path_1.default.join(electron_1.app.getPath('userData'), 'threat-feeds.json');
         this.loadSettings();
         this.loadCachedBlocklist();
+        this.loadThreatCache();
         this.seedUserApiKey();
         this.fetchThreatFeed();
+        this.refreshThreatFeeds();
     }
     loadSettings() {
         try {
@@ -187,6 +203,28 @@ class SecurityManager {
             }
         }
     }
+    loadThreatCache() {
+        const cached = (0, threat_feeds_1.loadThreatCache)(this.threatCachePath);
+        if (cached)
+            this.threatIndex = cached;
+    }
+    /** Background refresh of URLhaus + OpenPhish; never blocks startup. */
+    refreshThreatFeeds() {
+        void (async () => {
+            try {
+                const feeds = await (0, threat_feeds_1.fetchThreatFeeds)();
+                const ids = Object.keys(feeds);
+                if (ids.length === 0)
+                    return;
+                this.threatIndex = (0, threat_feeds_1.buildThreatIndex)(feeds);
+                (0, threat_feeds_1.saveThreatCache)(this.threatCachePath, this.threatIndex);
+                console.log(`[ThreatFeeds] Refreshed: ${ids.map(id => `${id} (${feeds[id].urls.length})`).join(', ')}`);
+            }
+            catch (err) {
+                console.log('[ThreatFeeds] Refresh failed, keeping cache:', err instanceof Error ? err.message : String(err));
+            }
+        })();
+    }
     async fetchThreatFeed() {
         try {
             const response = await fetch('https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt');
@@ -232,6 +270,11 @@ class SecurityManager {
         if (this.dynamicBlockedDomains.has(hostname) ||
             this.dynamicBlockedDomains.has(hostname.replace(/^www\./, ''))) {
             return { safe: false, reason: 'malware' };
+        }
+        // Check aggregated threat feeds (URLhaus malware, OpenPhish phishing)
+        const feedHit = (0, threat_feeds_1.matchThreatIndex)(url, this.threatIndex);
+        if (feedHit.matched) {
+            return { safe: false, reason: feedHit.reason ?? 'malware' };
         }
         // 1. Check local blocklist patterns (immediate match)
         for (const pattern of BLOCKED_DOMAINS) {
@@ -372,8 +415,12 @@ class SecurityManager {
             return this.getSettings();
         });
         electron_1.ipcMain.handle('security:get-api-key', async () => {
-            // Return the actual key — masking is done in the renderer UI layer
-            return await this.getApiKey();
+            // SECURITY: Never return the raw API key to the renderer.
+            // Return a masked version for display purposes only.
+            const key = await this.getApiKey();
+            if (!key)
+                return null;
+            return key.slice(0, 4) + '***' + key.slice(-4);
         });
         electron_1.ipcMain.handle('security:set-api-key', async (_event, key) => {
             await this.setApiKey(key);

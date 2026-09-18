@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FindInPage } from './FindInPage';
 import { ShieldMenu } from './ShieldMenu';
 import { zoomStorage } from '../utils/zoom';
+import { storage } from '../utils/storage';
 
 interface Tab {
   id: string;
@@ -33,6 +34,8 @@ interface AddressBarProps {
   onToggleAdblock: (enabled: boolean) => void;
   blockedCount: number;
   detectedScripts: string[];
+  onSelectEngine?: (engine: 'google' | 'bing' | 'duckduckgo' | 'brave') => void;
+  currentEngine?: 'google' | 'bing' | 'duckduckgo' | 'brave';
 }
 
 export function AddressBar({
@@ -54,6 +57,8 @@ export function AddressBar({
   onToggleAdblock,
   blockedCount,
   detectedScripts,
+  onSelectEngine: onSelectEngineProp,
+  currentEngine,
 }: AddressBarProps) {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -62,16 +67,13 @@ export function AddressBar({
   const [isSecurityHUDOpen, setIsSecurityHUDOpen] = useState(false);
   const [isMoreOptionsOpen, setIsMoreOptionsOpen] = useState(false);
   const [isPerfHUDOpen, setIsPerfHUDOpen] = useState(false);
-  const [searchEngine, setSearchEngine] = useState<'google' | 'bing' | 'duckduckgo' | 'brave'>(() => {
-    return (localStorage.getItem('icrush-default-search-engine') as any) || 'google';
-  });
   const [ddgSuggestions, setDdgSuggestions] = useState<string[]>([]);
   const [isEngineDropdownOpen, setIsEngineDropdownOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSelectEngine = (engine: 'google' | 'bing' | 'duckduckgo' | 'brave') => {
-    setSearchEngine(engine);
-    localStorage.setItem('icrush-default-search-engine', engine);
+    storage.setSearchEngine(engine);
+    onSelectEngineProp?.(engine);
     setIsEngineDropdownOpen(false);
   };
 
@@ -367,7 +369,7 @@ export function AddressBar({
               type="button"
               className="search-engine-picker-btn"
               onClick={() => setIsEngineDropdownOpen(!isEngineDropdownOpen)}
-              title={`Active Search Engine: ${searchEngine.toUpperCase()}`}
+              title={`Active Search Engine: ${currentEngine.toUpperCase()}`}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -384,7 +386,7 @@ export function AddressBar({
                 userSelect: 'none'
               }}
             >
-              <span>{searchEngine === 'google' ? 'G' : searchEngine === 'duckduckgo' ? 'DDG' : searchEngine === 'bing' ? 'B' : 'BR'}</span>
+              <span>{currentEngine === 'google' ? 'G' : currentEngine === 'duckduckgo' ? 'DDG' : currentEngine === 'bing' ? 'B' : 'BR'}</span>
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -419,13 +421,13 @@ export function AddressBar({
                     type="button"
                     onClick={() => handleSelectEngine(item.key as any)}
                     style={{
-                      background: searchEngine === item.key ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
-                      color: searchEngine === item.key ? '#d4af37' : '#e2e8f0',
+                      background: currentEngine === item.key ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                      color: currentEngine === item.key ? '#d4af37' : '#e2e8f0',
                       border: 'none',
                       padding: '6px 8px',
                       borderRadius: '6px',
                       fontSize: '11px',
-                      fontWeight: searchEngine === item.key ? 'bold' : 'normal',
+                      fontWeight: currentEngine === item.key ? 'bold' : 'normal',
                       textAlign: 'left',
                       cursor: 'pointer',
                       display: 'flex',
@@ -434,7 +436,7 @@ export function AddressBar({
                     }}
                   >
                     <span>{item.name}</span>
-                    {searchEngine === item.key && <span>✓</span>}
+                    {currentEngine === item.key && <span>✓</span>}
                   </button>
                 ))}
               </div>
@@ -479,7 +481,7 @@ export function AddressBar({
             onChange={e => setInputValue(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            placeholder={`Search ${searchEngine.toUpperCase()} or type a URL...`}
+            placeholder={`Search ${currentEngine.toUpperCase()} or type a URL...`}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'copy';

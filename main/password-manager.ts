@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import * as keytar from 'keytar';
 import crypto from 'crypto';
+import fs from 'fs';
 
 const SERVICE_NAME = 'GeminiBrowser';
 const VAULT_KEY = 'password-vault';
@@ -252,7 +253,18 @@ export function initPasswordManager(): void {
       })),
       exportedAt: Date.now(),
     };
-    return JSON.stringify(exportable, null, 2);
+    // SECURITY: Never return plaintext passwords to renderer.
+    // Save to file and return the file path instead.
+    const { dialog } = require('electron') as typeof import('electron');
+    const win = require('electron').BrowserWindow.getFocusedWindow();
+    const result = await dialog.showSaveDialog(win!, {
+      title: 'Export Passwords',
+      defaultPath: `passwords-export-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    fs.writeFileSync(result.filePath, JSON.stringify(exportable, null, 2), 'utf-8');
+    return result.filePath;
   });
 
   ipcMain.handle(

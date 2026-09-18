@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import type { ExtensionTrustReport } from '../../main/extension-trust.js';
 
 export interface ExtensionMetadata {
   id: string;
@@ -91,7 +92,7 @@ export function ExtensionsDashboard({
   onCreateTab,
   onOpenSettings,
 }: ExtensionsDashboardProps) {
-  const isDark = (localStorage.getItem('homescreen_theme_mode') || 'deep-canvas') === 'deep-canvas';
+  const isDark = (localStorage.getItem('homescreen-theme-mode') || 'deep-canvas') === 'deep-canvas';
 
   const [extensions, setExtensions] = useState<ExtensionMetadata[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,6 +108,12 @@ export function ExtensionsDashboard({
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [installUrl, setInstallUrl] = useState('');
   const [isInstallingUrl, setIsInstallingUrl] = useState(false);
+  const [analysis, setAnalysis] = useState<{ reportId: string; report: ExtensionTrustReport } | null>(null);
+
+  const closeUrlModal = () => {
+    setShowUrlModal(false);
+    setAnalysis(null);
+  };
 
   // Details drawer state
   const [detailsExt, setDetailsExt] = useState<ExtensionMetadata | null>(null);
@@ -235,24 +242,51 @@ export function ExtensionsDashboard({
     }
   };
 
-  // Real Install from URL
+  // Two-phase install: analyze first, install directly only when low-risk.
+  // Elevated/high-risk extensions require explicit approval of the report below.
   const handleInstallFromUrl = async () => {
     if (!installUrl.trim()) return;
     setIsInstallingUrl(true);
     try {
-      const extApi: any = window.electronAPI?.extensions;
-      if (extApi?.installFromUrl) {
+      const extApi = window.electronAPI?.extensions;
+      if (!extApi?.installFromUrl || !extApi?.analyzeUrl) {
+        throw new Error('Install from URL is not supported in this runtime.');
+      }
+      const result = await extApi.analyzeUrl(installUrl.trim());
+      if (result.report.riskLevel === 'low') {
         await extApi.installFromUrl(installUrl.trim());
         setInstallUrl('');
-        setShowUrlModal(false);
+        closeUrlModal();
         await loadExtensions();
         window.dispatchEvent(new Event('extensions-modified'));
         notifyToast('Extension installed and loaded successfully!');
       } else {
+        setAnalysis(result);
+      }
+    } catch (err: unknown) {
+      notifyToast('Installation failed: ' + (err instanceof Error ? err.message : String(err)), true);
+    } finally {
+      setIsInstallingUrl(false);
+    }
+  };
+
+  const handleApproveInstall = async () => {
+    if (!analysis) return;
+    setIsInstallingUrl(true);
+    try {
+      const extApi = window.electronAPI?.extensions;
+      if (!extApi?.installFromUrl) {
         throw new Error('Install from URL is not supported in this runtime.');
       }
-    } catch (err: any) {
-      notifyToast('Installation failed: ' + (err?.message || String(err)), true);
+      await extApi.installFromUrl(installUrl.trim(), { approvedReportId: analysis.reportId });
+      const installedName = analysis.report.name;
+      setInstallUrl('');
+      closeUrlModal();
+      await loadExtensions();
+      window.dispatchEvent(new Event('extensions-modified'));
+      notifyToast(`Extension "${installedName}" installed and loaded successfully!`);
+    } catch (err: unknown) {
+      notifyToast('Installation failed: ' + (err instanceof Error ? err.message : String(err)), true);
     } finally {
       setIsInstallingUrl(false);
     }
@@ -973,7 +1007,7 @@ export function ExtensionsDashboard({
             justifyContent: 'center',
             zIndex: 100,
           }}
-          onClick={() => setShowUrlModal(false)}
+          onClick={closeUrlModal}
         >
           <div
             style={{
@@ -995,7 +1029,7 @@ export function ExtensionsDashboard({
               </h3>
               <button
                 type="button"
-                onClick={() => setShowUrlModal(false)}
+                onClick={closeUrlModal}
                 style={{ background: 'none', border: 'none', color: isDark ? '#a1a1aa' : '#71717a', cursor: 'pointer' }}
               >
                 <IconCross />
@@ -1005,6 +1039,64 @@ export function ExtensionsDashboard({
             <p style={{ margin: 0, fontSize: '12px', color: isDark ? '#a1a1aa' : '#71717a', lineHeight: '1.45' }}>
               Enter a direct Chrome Web Store URL, GitHub release ZIP URL, or CRX file URL to download and install into the browser.
             </p>
+
+            {analysis && (
+              <div
+                style={{
+                  borderRadius: '12px',
+                  padding: '14px',
+                  background: isDark ? 'rgba(0,0,0,0.4)' : '#f4eee5',
+                  border:
+                    analysis.report.riskLevel === 'high'
+                      ? '1px solid rgba(239,68,68,0.5)'
+                      : '1px solid rgba(245,158,11,0.5)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: '800',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      background:
+                        analysis.report.riskLevel === 'high'
+                          ? 'rgba(239,68,68,0.15)'
+                          : 'rgba(245,158,11,0.15)',
+                      color: analysis.report.riskLevel === 'high' ? '#ef4444' : '#f59e0b',
+                    }}
+                  >
+                    {analysis.report.riskLevel} risk
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: '700' }}>
+                    {analysis.report.name} v{analysis.report.version}
+                  </span>
+                </div>
+                {analysis.report.permissions.length > 0 && (
+                  <div style={{ fontSize: '12px', color: isDark ? '#d4d4d8' : '#3f3f46' }}>
+                    <strong>Permissions:</strong> {analysis.report.permissions.join(', ')}
+                  </div>
+                )}
+                {analysis.report.hostPermissions.length > 0 && (
+                  <div style={{ fontSize: '12px', color: isDark ? '#d4d4d8' : '#3f3f46' }}>
+                    <strong>Site access:</strong> {analysis.report.hostPermissions.join(', ')}
+                  </div>
+                )}
+                {analysis.report.findings.map((finding, idx) => (
+                  <div key={idx} style={{ fontSize: '12px', color: isDark ? '#a1a1aa' : '#71717a' }}>
+                    • {finding}
+                  </div>
+                ))}
+                <div style={{ fontSize: '11.5px', color: isDark ? '#71717a' : '#8c827a' }}>
+                  Only approve if you trust this extension&apos;s author. Approval applies to this download only.
+                </div>
+              </div>
+            )}
 
             <input
               type="text"
@@ -1026,7 +1118,7 @@ export function ExtensionsDashboard({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
               <button
                 type="button"
-                onClick={() => setShowUrlModal(false)}
+                onClick={closeUrlModal}
                 style={{
                   padding: '8px 16px',
                   borderRadius: '8px',
@@ -1038,12 +1130,12 @@ export function ExtensionsDashboard({
                   cursor: 'pointer',
                 }}
               >
-                Cancel
+                {analysis ? 'Back' : 'Cancel'}
               </button>
 
               <button
                 type="button"
-                onClick={handleInstallFromUrl}
+                onClick={analysis ? handleApproveInstall : handleInstallFromUrl}
                 disabled={!installUrl.trim() || isInstallingUrl}
                 style={{
                   padding: '8px 18px',
@@ -1057,7 +1149,13 @@ export function ExtensionsDashboard({
                   opacity: installUrl.trim() && !isInstallingUrl ? 1 : 0.6,
                 }}
               >
-                {isInstallingUrl ? 'Downloading & Extracting...' : 'Install Extension'}
+                {isInstallingUrl
+                  ? analysis
+                    ? 'Installing...'
+                    : 'Downloading & Analyzing...'
+                  : analysis
+                    ? 'Approve & Install'
+                    : 'Install Extension'}
               </button>
             </div>
           </div>

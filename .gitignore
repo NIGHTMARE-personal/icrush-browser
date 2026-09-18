@@ -16,6 +16,7 @@ dist/
 dist-electron/
 out/
 build/
+main/main/
 
 # Test reports
 playwright-report/
@@ -42,5 +43,7 @@ scripts/agent-boardroom.mjs
 # OS files
 .DS_Store
 Thumbs.db
+*.tmp
+*.temp
 
 .github/

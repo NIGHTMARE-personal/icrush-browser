@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IncognitoHomescreen } from './IncognitoHomescreen';
 import { ChronosDashboard } from './ChronosDashboard';
 import { BrandLogo } from './BrandLogo';
+import { HomescreenCustomizer } from './homescreen/HomescreenCustomizer';
 
 interface Tab {
   id: string;
@@ -67,7 +68,7 @@ const WEATHER_CODE_LABELS: Record<number, string> = {
   95: 'Thunderstorm', 96: 'Thunderstorm w/ Hail', 99: 'Thunderstorm w/ Heavy Hail',
 };
 
-const WEATHER_CACHE_KEY = 'icrush-homescreen-weather';
+const WEATHER_CACHE_KEY = 'homescreen-weather-cache';
 const WEATHER_CACHE_TTL = 30 * 60 * 1000;
 
 /* ─────────────────────────────────────────────────────────────
@@ -208,10 +209,21 @@ export function IcrushBrowserHomescreen({
   currentEngine = 'google',
   onSelectEngine,
   isIncognito = false,
+  onSelectPalette,
 }: IcrushBrowserHomescreenProps) {
   // Theme State
   const [themeMode, setThemeMode] = useState<'deep-canvas' | 'warm-paper'>(() => {
-    return (localStorage.getItem('homescreen_theme_mode') as any) || 'deep-canvas';
+    return (localStorage.getItem('homescreen-theme-mode') as any) || 'deep-canvas';
+  });
+
+  // Customizer State — persisted to localStorage, read back on load
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [customBg, setCustomBg] = useState(() => localStorage.getItem('homescreen-bg') || '');
+  const [customFont, setCustomFont] = useState(() => localStorage.getItem('homescreen-font') || 'Sans');
+  const [customColor, setCustomColor] = useState(() => localStorage.getItem('homescreen-color') || 'warm-gold');
+  const [customClock, setCustomClock] = useState(() => localStorage.getItem('homescreen-clock') || 'Digital');
+  const [widgetVisibility, setWidgetVisibility] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('homescreen-widgets') || '{}'); } catch { return {}; }
   });
 
   // Mode: 'web' vs 'ai'
@@ -242,7 +254,7 @@ export function IcrushBrowserHomescreen({
   // Bento Widgets State
   const [favorites, setFavorites] = useState<QuickLink[]>(() => {
     try {
-      const stored = localStorage.getItem('homescreen_favorites');
+      const stored = localStorage.getItem('homescreen-favorites');
       return stored ? JSON.parse(stored) : DEFAULT_FAVORITES;
     } catch {
       return DEFAULT_FAVORITES;
@@ -251,7 +263,7 @@ export function IcrushBrowserHomescreen({
 
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     try {
-      const stored = localStorage.getItem('homescreen_tasks');
+      const stored = localStorage.getItem('homescreen-tasks');
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -259,7 +271,7 @@ export function IcrushBrowserHomescreen({
   });
   const [taskFilter, setTaskFilter] = useState<'all' | 'inbox'>('all');
   const [newTaskText, setNewTaskText] = useState('');
-  const [notes, setNotes] = useState(() => localStorage.getItem('homescreen_notes') || '');
+  const [notes, setNotes] = useState(() => localStorage.getItem('gemini-browser-notes') || '');
 
   const widgetDeckRef = useRef<HTMLDivElement>(null);
 
@@ -361,10 +373,16 @@ export function IcrushBrowserHomescreen({
     return () => clearInterval(interval);
   }, [is12Hour]);
 
+  const toggle12Hour = () => {
+    const next = !is12Hour;
+    setIs12Hour(next);
+    localStorage.setItem('hs_12h', String(next));
+  };
+
   const toggleTheme = () => {
     const next = themeMode === 'deep-canvas' ? 'warm-paper' : 'deep-canvas';
     setThemeMode(next);
-    localStorage.setItem('homescreen_theme_mode', next);
+    localStorage.setItem('homescreen-theme-mode', next);
   };
 
   const handleEngineChange = (engineId: string) => {
@@ -416,25 +434,25 @@ export function IcrushBrowserHomescreen({
     };
     const nextTasks = [newTask, ...tasks];
     setTasks(nextTasks);
-    localStorage.setItem('homescreen_tasks', JSON.stringify(nextTasks));
+    localStorage.setItem('homescreen-tasks', JSON.stringify(nextTasks));
     setNewTaskText('');
   };
 
   const toggleTask = (id: string) => {
     const nextTasks = tasks.map(t => (t.id === id ? { ...t, completed: !t.completed } : t));
     setTasks(nextTasks);
-    localStorage.setItem('homescreen_tasks', JSON.stringify(nextTasks));
+    localStorage.setItem('homescreen-tasks', JSON.stringify(nextTasks));
   };
 
   const deleteTask = (id: string) => {
     const nextTasks = tasks.filter(t => t.id !== id);
     setTasks(nextTasks);
-    localStorage.setItem('homescreen_tasks', JSON.stringify(nextTasks));
+    localStorage.setItem('homescreen-tasks', JSON.stringify(nextTasks));
   };
 
   const handleNotesChange = (val: string) => {
     setNotes(val);
-    localStorage.setItem('homescreen_notes', val);
+    localStorage.setItem('gemini-browser-notes', val);
   };
 
   const handleAddFavorite = () => {
@@ -443,7 +461,7 @@ export function IcrushBrowserHomescreen({
     const name = prompt('Enter website name:', url.replace('https://', '').replace('http://', '').split('/')[0]) || 'Site';
     const next = [...favorites, { name, url }];
     setFavorites(next);
-    localStorage.setItem('homescreen_favorites', JSON.stringify(next));
+    localStorage.setItem('homescreen-favorites', JSON.stringify(next));
   };
 
   if (isIncognito) {
@@ -451,6 +469,15 @@ export function IcrushBrowserHomescreen({
   }
 
   const isDark = themeMode === 'deep-canvas';
+  const COLOR_MAP: Record<string, string> = {
+    'indigo-night': '#6366f1',
+    'ocean-teal': '#14b8a6',
+    'sunset-rose': '#f43f5e',
+    'obsidian-glass': '#64748b',
+    'warm-gold': '#d4af37',
+    'emerald-forest': '#10b981',
+  };
+  const accentColor = COLOR_MAP[customColor] || '#d4af37';
 
   return (
     <div
@@ -460,9 +487,15 @@ export function IcrushBrowserHomescreen({
         height: '100%',
         overflowY: 'auto',
         scrollBehavior: 'smooth',
-        background: isDark ? '#0a0a0e' : '#F9F6F0',
+        background: customBg
+          ? `url(${customBg}) center/cover no-repeat${isDark ? '' : ', rgba(249,246,240,0.92)'}`
+          : isDark ? '#0a0a0e' : '#F9F6F0',
         color: isDark ? '#f9f6f0' : '#3C322C',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: customFont === 'Serif'
+          ? 'Playfair Display, Georgia, serif'
+          : customFont === 'Mono'
+            ? '"JetBrains Mono", "Fira Code", monospace'
+            : '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         position: 'relative',
         userSelect: 'none',
       }}
@@ -569,8 +602,8 @@ export function IcrushBrowserHomescreen({
         {/* 4. Full-Screen Settings Dashboard Trigger */}
         <button
           type="button"
-          onClick={() => onOpenSettings('general')}
-          title="Open Full-Screen Settings Dashboard"
+          onClick={() => setIsCustomizerOpen(true)}
+          title="Customize Homescreen"
           style={{
             width: '38px',
             height: '38px',
@@ -665,7 +698,7 @@ export function IcrushBrowserHomescreen({
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <span style={{ fontSize: '10.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.2em', color: isDark ? '#d4af37' : '#C86D51' }}>
+                <span style={{ fontSize: '10.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.2em', color: isDark ? accentColor : '#C86D51' }}>
                   Productivity Cheat Sheet
                 </span>
                 <h3 style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: '700', fontFamily: 'Playfair Display, Georgia, serif', color: isDark ? '#ffffff' : '#1e1b18' }}>
@@ -887,7 +920,7 @@ export function IcrushBrowserHomescreen({
                 border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)',
                 borderRadius: '9999px',
                 padding: '6px 14px',
-                color: isDark ? '#d4af37' : '#C86D51',
+                color: isDark ? accentColor : '#C86D51',
                 fontSize: '11px',
                 fontWeight: '700',
                 cursor: 'pointer',
@@ -964,7 +997,7 @@ export function IcrushBrowserHomescreen({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: isDark ? '#d4af37' : '#C86D51',
+                color: isDark ? accentColor : '#C86D51',
                 fontSize: '12px',
                 fontWeight: '700',
                 cursor: 'pointer',
@@ -1000,7 +1033,19 @@ export function IcrushBrowserHomescreen({
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '13.5px', color: isDark ? '#a1a1aa' : '#6c625c' }}>
               <span>{dateStr}</span>
-              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: isDark ? '#d4af37' : '#C86D51' }} />
+              <button
+                onClick={toggle12Hour}
+                style={{
+                  padding: '2px 8px', borderRadius: '9999px', border: 'none', cursor: 'pointer',
+                  fontSize: '10px', fontWeight: '600', letterSpacing: '0.05em',
+                  background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                  color: isDark ? accentColor : '#C86D51',
+                }}
+                title="Toggle 12/24 hour clock"
+              >
+                {is12Hour ? '12H' : '24H'}
+              </button>
+              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: isDark ? accentColor : '#C86D51' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: isDark ? '#f2ca50' : '#C86D51' }}><IconSunCloud /></span>
                 {weatherLoading ? (
@@ -1087,7 +1132,7 @@ export function IcrushBrowserHomescreen({
                 backdropFilter: 'blur(20px)',
               }}
             >
-              <span style={{ color: isDark ? '#d4af37' : '#C86D51' }}>
+              <span style={{ color: isDark ? accentColor : '#C86D51' }}>
                 {searchMode === 'web' ? <IconSearch /> : <IconSparkles />}
               </span>
 
@@ -1331,7 +1376,7 @@ export function IcrushBrowserHomescreen({
           {/* Tier 2 Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
             <div>
-              <div style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.28em', color: isDark ? '#d4af37' : '#C86D51', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.28em', color: isDark ? accentColor : '#C86D51', marginBottom: '4px' }}>
                 Productivity Canvas
               </div>
               <h2 style={{ fontFamily: 'Playfair Display, Georgia, serif', fontSize: '28px', fontWeight: '700', margin: 0, color: isDark ? '#f9f6f0' : '#1a1715' }}>
@@ -1377,7 +1422,7 @@ export function IcrushBrowserHomescreen({
                 <button
                   type="button"
                   onClick={handleAddFavorite}
-                  style={{ background: 'none', border: 'none', color: isDark ? '#d4af37' : '#C86D51', cursor: 'pointer', display: 'flex', padding: 0 }}
+                  style={{ background: 'none', border: 'none', color: isDark ? accentColor : '#C86D51', cursor: 'pointer', display: 'flex', padding: 0 }}
                   title="Add Favorite Shortcut"
                 >
                   <IconPlus />
@@ -1410,7 +1455,7 @@ export function IcrushBrowserHomescreen({
                         height: '28px',
                         borderRadius: '8px',
                         background: isDark ? 'rgba(212, 175, 55, 0.15)' : 'rgba(200, 109, 81, 0.15)',
-                        color: isDark ? '#d4af37' : '#C86D51',
+                        color: isDark ? accentColor : '#C86D51',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1464,7 +1509,7 @@ export function IcrushBrowserHomescreen({
                 boxShadow: isDark ? '0 12px 30px rgba(0, 0, 0, 0.4)' : '0 8px 24px rgba(0, 0, 0, 0.04)',
               }}
             >
-              <div style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.2em', color: isDark ? '#d4af37' : '#C86D51', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.2em', color: isDark ? accentColor : '#C86D51', marginBottom: '8px' }}>
                 LIVE SECONDS
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: '24px', fontWeight: '700', color: isDark ? '#ffffff' : '#1a1715' }}>
@@ -1785,6 +1830,26 @@ export function IcrushBrowserHomescreen({
           </footer>
         </div>
       </section>
+
+      <HomescreenCustomizer
+        isOpen={isCustomizerOpen}
+        onClose={() => setIsCustomizerOpen(false)}
+        bgImage={customBg}
+        onBgChange={setCustomBg}
+        activeFont={customFont}
+        onFontChange={setCustomFont}
+        colorState={customColor}
+        onColorChange={setCustomColor}
+        clockStyle={customClock}
+        onClockStyleChange={setCustomClock}
+        widgetVisibility={widgetVisibility}
+        onWidgetToggle={(widget, visible) => {
+          const next = { ...widgetVisibility, [widget]: visible };
+          setWidgetVisibility(next);
+          localStorage.setItem('homescreen-widgets', JSON.stringify(next));
+        }}
+        onSelectPalette={onSelectPalette}
+      />
     </div>
   );
 }

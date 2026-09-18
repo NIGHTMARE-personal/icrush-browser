@@ -7,11 +7,18 @@ interface PomodoroState {
   sessionCount: number;
 }
 
-const MODES = {
-  work: { duration: 25 * 60, label: 'Work', color: '#d4af37' },
-  shortBreak: { duration: 5 * 60, label: 'Short Break', color: '#10b981' },
-  longBreak: { duration: 15 * 60, label: 'Long Break', color: '#6366f1' },
-} as const;
+const getDuration = (key: string, fallback: number) => {
+  try {
+    const val = parseInt(localStorage.getItem(key) || '', 10);
+    return !isNaN(val) && val > 0 ? val * 60 : fallback;
+  } catch { return fallback; }
+};
+
+const MODES = () => ({
+  work: { duration: getDuration('chronos_focus_duration', 25 * 60), label: 'Work', color: '#d4af37' },
+  shortBreak: { duration: getDuration('chronos_short_break', 5 * 60), label: 'Short Break', color: '#10b981' },
+  longBreak: { duration: getDuration('chronos_long_break', 15 * 60), label: 'Long Break', color: '#6366f1' },
+}) as const;
 
 const SESSIONS_BEFORE_LONG_BREAK = 4;
 const CIRCUMFERENCE = 2 * Math.PI * 54;
@@ -24,7 +31,7 @@ const getInitialState = (): PomodoroState => {
       const parsed = JSON.parse(saved);
       return {
         mode: parsed.mode || 'work',
-        timeLeft: parsed.timeLeft ?? MODES.work.duration,
+        timeLeft: parsed.timeLeft ?? MODES().work.duration,
         isRunning: false,
         sessionCount: parsed.sessionCount || 1,
       };
@@ -32,7 +39,7 @@ const getInitialState = (): PomodoroState => {
   } catch {}
   return {
     mode: 'work',
-    timeLeft: MODES.work.duration,
+    timeLeft: MODES().work.duration,
     isRunning: false,
     sessionCount: 1,
   };
@@ -42,6 +49,7 @@ export const HomescreenPomodoro = () => {
   const [state, setState] = useState<PomodoroState>(getInitialState);
   const intervalRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const modes = MODES();
 
   const playBeep = useCallback(() => {
     try {
@@ -77,7 +85,7 @@ export const HomescreenPomodoro = () => {
       }
       return {
         mode: nextMode,
-        timeLeft: MODES[nextMode].duration,
+        timeLeft: modes[nextMode].duration,
         isRunning: currentMode === 'work',
         sessionCount: nextMode === 'work' ? sessionCount + 1 : sessionCount,
       };
@@ -125,7 +133,7 @@ export const HomescreenPomodoro = () => {
   const handleReset = () => {
     setState((prev) => ({
       ...prev,
-      timeLeft: MODES[prev.mode].duration,
+      timeLeft: modes[prev.mode].duration,
       isRunning: false,
     }));
   };
@@ -133,23 +141,23 @@ export const HomescreenPomodoro = () => {
   const handleModeChange = (mode: PomodoroState['mode']) => {
     setState({
       mode,
-      timeLeft: MODES[mode].duration,
+      timeLeft: modes[mode].duration,
       isRunning: false,
       sessionCount: mode === 'work' ? state.sessionCount : state.sessionCount,
     });
   };
 
-  const progress = state.timeLeft / MODES[state.mode].duration;
+  const progress = state.timeLeft / modes[state.mode].duration;
   const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
   const minutes = Math.floor(state.timeLeft / 60);
   const seconds = state.timeLeft % 60;
   const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  const color = MODES[state.mode].color;
+  const color = modes[state.mode].color;
 
   return (
     <div className="homescreen-pomodoro">
       <div className="pomodoro-modes">
-        {(Object.keys(MODES) as Array<PomodoroState['mode']>).map((mode) => (
+        {(Object.keys(modes) as Array<PomodoroState['mode']>).map((mode) => (
           <button
             key={mode}
             className={`pomodoro-mode-btn${state.mode === mode ? ' active' : ''}`}
@@ -160,7 +168,7 @@ export const HomescreenPomodoro = () => {
                 : undefined
             }
           >
-            {MODES[mode].label}
+            {modes[mode].label}
           </button>
         ))}
       </div>

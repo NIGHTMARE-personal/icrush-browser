@@ -884,9 +884,9 @@ export const AISidebar = memo(function AISidebar({
           <button
             type="button"
             onClick={handleSend}
-            disabled={!inputText.trim() && attachedFiles.length === 0}
+            disabled={(!inputText.trim() && attachedFiles.length === 0) || isLoading}
             style={{
-              background: inputText.trim() || attachedFiles.length > 0 ? '#d4af37' : 'rgba(255, 255, 255, 0.05)',
+              background: (!inputText.trim() && attachedFiles.length === 0) || isLoading ? 'rgba(255, 255, 255, 0.05)' : '#d4af37',
               border: 'none',
               borderRadius: '10px',
               width: '28px',
@@ -894,8 +894,8 @@ export const AISidebar = memo(function AISidebar({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: inputText.trim() || attachedFiles.length > 0 ? '#000000' : '#71717a',
-              cursor: inputText.trim() || attachedFiles.length > 0 ? 'pointer' : 'default',
+              color: (!inputText.trim() && attachedFiles.length === 0) || isLoading ? '#71717a' : '#000000',
+              cursor: (!inputText.trim() && attachedFiles.length === 0) || isLoading ? 'default' : 'pointer',
               transition: 'all 0.15s ease',
             }}
           >

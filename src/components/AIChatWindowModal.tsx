@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../utils/storage';
 import { PROVIDERS } from '../utils/providers';
+import { useToast } from './Toast';
 
 interface AIChatWindowModalProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export function AIChatWindowModal({
   activeTabUrl,
   apiKeys = {},
 }: AIChatWindowModalProps) {
+  const { error } = useToast();
   const [input, setInput] = useState(initialPrompt);
   const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; data: string; mimeType: string }>>([]);
   const [selectedModel, setSelectedModel] = useState(() => {
@@ -124,7 +126,7 @@ export function AIChatWindowModal({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 15 * 1024 * 1024) {
-      alert('Attachment too large. Maximum file size is 15MB.');
+      error('Attachment too large. Maximum file size is 15MB.');
       return;
     }
     const mimeType = file.type || 'image/png';

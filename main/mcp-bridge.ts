@@ -5,7 +5,7 @@ import type {
   MCPServerConfig,
   MCPTool,
   MCPToolCallResult,
-} from '../src/types/agent-contracts';
+} from '../shared/agent-contracts';
 
 /**
  * Model Context Protocol (MCP) Bridge & Connector Engine

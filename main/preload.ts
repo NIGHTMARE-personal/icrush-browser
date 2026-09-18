@@ -9,7 +9,11 @@ import type {
   AgentUndoResult,
   SensitiveActionPrompt,
   SensitiveActionDecision,
-} from '../src/types/agent-contracts';
+  AgentAuditEvent,
+  AgentPermissionTier,
+  AgentPolicyStore,
+  SiteAgentPolicy,
+} from '../shared/agent-contracts';
 
 interface TabInfo {
   id: string;
@@ -56,6 +60,9 @@ interface AgentActionRequest {
   amount?: number;
   keys?: string;
   formFields?: Array<{ selector: string; value: string }>;
+  url?: string;
+  approvedPromptId?: string;
+  actor?: string;
 }
 
 interface AgentActionResult {
@@ -64,6 +71,12 @@ interface AgentActionResult {
   error?: string;
   extractedData?: string;
   jsCode?: string;
+  blocked?: boolean;
+  requiresApproval?: boolean;
+  promptId?: string;
+  approved?: boolean;
+  tier?: AgentPermissionTier;
+  reasons?: string[];
 }
 
 interface Skill {
@@ -76,9 +89,14 @@ interface Skill {
 }
 
 interface BrowserCommand {
-  action: 'navigate' | 'search' | 'goBack' | 'goForward' | 'refresh' | 'newTab' | 'closeTab';
+  action: 'navigate' | 'search' | 'goBack' | 'goForward' | 'refresh' | 'newTab' | 'closeTab' | 'type' | 'click' | 'fill' | 'extract' | 'press' | 'openHtml';
   url?: string;
   query?: string;
+  selector?: string;
+  text?: string;
+  value?: string;
+  key?: string;
+  html?: string;
 }
 
 interface GeminiErrorInfo {
@@ -92,6 +110,16 @@ interface ExtensionMetadata {
   version: string;
   path: string;
   enabled: boolean;
+}
+
+interface ExtensionTrustReport {
+  name: string;
+  version: string;
+  manifestVersion: number;
+  permissions: string[];
+  hostPermissions: string[];
+  riskLevel: 'low' | 'elevated' | 'high' | 'blocked';
+  findings: string[];
 }
 
 export interface SiteShields {
@@ -220,39 +248,26 @@ export interface TorStatus {
 
 interface VPNStatus {
   connected: boolean;
-  countryCode: string;
-  countryName: string;
+  serverName: string;
   serverLatency: number;
   bandwidth: { up: number; down: number; total: number };
-  currentPlan: VPNPlan | null;
   interfaceName: string;
   localIP: string;
   endpointIP: string;
   lastHandshake: number;
 }
 
-interface VPNServer {
-  countryCode: string;
-  countryName: string;
-  flag: string;
-  endpoint: string;
-  publicKey: string;
-  allowedIps: string;
-  dnsServers: string[];
+interface VPNConfigData {
+  privateKey: string;
+  address: string;
+  dns: string[];
   mtu: number;
-  persistentKeepalive: number;
-  ping: number;
-  uptime: number;
-}
-
-interface VPNPlan {
-  id: string;
-  name: string;
-  currency: string;
-  price: number;
-  period: 'daily' | 'monthly' | 'yearly';
-  dataLimit: number;
-  features: string[];
+  peers: Array<{
+    publicKey: string;
+    endpoint: string;
+    allowedIps: string;
+    persistentKeepalive: number;
+  }>;
 }
 
 interface Cookie {
@@ -276,6 +291,16 @@ interface HistoryEntry {
   timestamp: number;
 }
 
+export interface UpdaterState {
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'unavailable' | 'error';
+  enabled: boolean;
+  appVersion: string;
+  version?: string;
+  progress?: number;
+  error?: string;
+  lastChecked?: number;
+}
+
 interface BookmarkEntry {
   id: string;
   url: string;
@@ -297,6 +322,7 @@ interface ElectronAPI {
       torCloudRouting?: boolean;
       files?: Array<{ inlineData: { mimeType: string; data: string } }>;
       systemInstruction?: string;
+      modelName?: string;
     }
   ) => void;
   requestCloudPlan: (payload: { prompt: string; provider: string; apiKey: string }) => Promise<string>;
@@ -340,6 +366,12 @@ interface ElectronAPI {
     highlight: (selector: string, color?: string, duration?: number) => Promise<{ jsCode: string }>;
     tooltip: (selector: string, text: string, color?: string) => Promise<{ jsCode: string }>;
     clickRipple: (x: number, y: number, color?: string) => Promise<{ jsCode: string }>;
+    getPolicy: () => Promise<AgentPolicyStore>;
+    setSitePolicy: (policy: { domain: string; maxTier: AgentPermissionTier; allowSensitive: boolean }) => Promise<SiteAgentPolicy>;
+    getAuditLog: () => Promise<AgentAuditEvent[]>;
+    clearAuditLog: () => Promise<boolean>;
+    checkNavigation: (fromUrl: string, toUrl: string) => Promise<{ crosses: boolean; reasons: string[] }>;
+    onAuditEvent: (callback: (event: AgentAuditEvent) => void) => () => void;
   };
   mcp: {
     listTools: () => Promise<MCPTool[]>;
@@ -381,7 +413,11 @@ interface ElectronAPI {
     removeExtension: (id: string) => Promise<void>;
     toggleExtension: (id: string, enabled: boolean) => Promise<ExtensionMetadata[]>;
     getExtensions: () => Promise<ExtensionMetadata[]>;
-    installFromUrl: (url: string) => Promise<ExtensionMetadata>;
+    installFromUrl: (url: string, opts?: { approvedReportId?: string }) => Promise<ExtensionMetadata>;
+    analyzeUrl: (url: string) => Promise<{ reportId: string; report: ExtensionTrustReport }>;
+  };
+  news: {
+    fetchFeed: (category: string) => Promise<Array<{ id: string; title: string; source: string; url: string; timeAgo: string; category: string }>>;
   };
   downloads: {
     getAll: () => Promise<DownloadItem[]>;
@@ -443,6 +479,8 @@ interface ElectronAPI {
     getBridgesList: () => Promise<BridgeConfig[]>;
     isOnionAddress: (url: string) => Promise<boolean>;
     ensureOnionUrl: (url: string) => Promise<string>;
+    fetchBridges: (transport: 'obfs4' | 'snowflake') => Promise<Array<{type: 'obfs4' | 'snowflake' | 'meek'; address: string; port: number; fingerprint: string; cert?: string; iatMode?: number}>>;
+    syncBinaries: () => Promise<void>;
     shouldUseTor: (url: string, torMode: boolean) => Promise<boolean>;
   };
   security: {
@@ -468,12 +506,9 @@ interface ElectronAPI {
   };
   vpn: {
     getStatus: () => Promise<VPNStatus>;
-    getServers: () => Promise<VPNServer[]>;
-    getPlans: () => Promise<VPNPlan[]>;
-    getSelectedServer: () => Promise<VPNServer | null>;
-    getSelectedPlan: () => Promise<VPNPlan>;
-    setServer: (countryCode: string) => Promise<void>;
-    setPlan: (planId: string) => Promise<void>;
+    importConfig: (rawConfig: string) => Promise<{ success: boolean; config?: VPNConfigData; error?: string }>;
+    getConfig: () => Promise<{ raw: string; parsed: VPNConfigData | null }>;
+    clearConfig: () => Promise<boolean>;
     connect: () => Promise<boolean>;
     disconnect: () => Promise<boolean>;
     isModeEnabled: () => Promise<boolean>;
@@ -522,6 +557,20 @@ interface ElectronAPI {
   apiKeys: {
     getAll: () => Promise<Record<string, string>>;
     setAll: (keys: Record<string, string>) => Promise<boolean>;
+  };
+  ollama: {
+    listModels: () => Promise<Array<{ id: string; name: string; size?: string; parameterSize?: string; family?: string }>>;
+  };
+  tab: {
+    extractContent: (tabId: string) => Promise<{ title: string; url: string; content: string }>;
+    extractAllContent: () => Promise<Array<{ id?: string; title: string; url: string; content: string }>>;
+  };
+  updater: {
+    getState: () => Promise<UpdaterState>;
+    check: () => Promise<UpdaterState>;
+    setEnabled: (enabled: boolean) => Promise<UpdaterState>;
+    quitAndInstall: () => Promise<boolean>;
+    onStatus: (callback: (state: UpdaterState) => void) => () => void;
   };
 }
 
@@ -583,6 +632,18 @@ const electronAPI: ElectronAPI = {
     highlight: (selector: string, color?: string, duration?: number) => ipcRenderer.invoke('agent:highlight', { selector, color, duration }),
     tooltip: (selector: string, text: string, color?: string) => ipcRenderer.invoke('agent:tooltip', { selector, text, color }),
     clickRipple: (x: number, y: number, color?: string) => ipcRenderer.invoke('agent:click-ripple', { x, y, color }),
+    getPolicy: () => ipcRenderer.invoke('agent:get-policy'),
+    setSitePolicy: (policy: { domain: string; maxTier: AgentPermissionTier; allowSensitive: boolean }) =>
+      ipcRenderer.invoke('agent:set-site-policy', policy),
+    getAuditLog: () => ipcRenderer.invoke('agent:get-audit-log'),
+    clearAuditLog: () => ipcRenderer.invoke('agent:clear-audit-log'),
+    checkNavigation: (fromUrl: string, toUrl: string) =>
+      ipcRenderer.invoke('agent:check-navigation', { fromUrl, toUrl }),
+    onAuditEvent: (callback: (event: AgentAuditEvent) => void) => {
+      const handler = (_event: IpcRendererEvent, event: AgentAuditEvent) => callback(event);
+      ipcRenderer.on('agent:audit-event', handler);
+      return () => ipcRenderer.off('agent:audit-event', handler);
+    },
   },
 
   mcp: {
@@ -637,7 +698,12 @@ const electronAPI: ElectronAPI = {
     removeExtension: id => ipcRenderer.invoke('extensions:remove', id),
     toggleExtension: (id, enabled) => ipcRenderer.invoke('extensions:toggle', { id, enabled }),
     getExtensions: () => ipcRenderer.invoke('extensions:get-all'),
-    installFromUrl: (url: string) => ipcRenderer.invoke('extensions:install-from-url', url),
+    installFromUrl: (url: string, opts?: { approvedReportId?: string }) =>
+      ipcRenderer.invoke('extensions:install-from-url', url, opts),
+    analyzeUrl: (url: string) => ipcRenderer.invoke('extensions:analyze-url', url),
+  },
+  news: {
+    fetchFeed: (category: string) => ipcRenderer.invoke('news:fetch-feed', category),
   },
   downloads: {
     getAll: () => ipcRenderer.invoke('downloads:get-all'),
@@ -719,6 +785,10 @@ const electronAPI: ElectronAPI = {
     // Onion utilities
     isOnionAddress: (url: string) => ipcRenderer.invoke('tor:is-onion', url),
     ensureOnionUrl: (url: string) => ipcRenderer.invoke('tor:ensure-onion-url', url),
+
+    fetchBridges: (transport: 'obfs4' | 'snowflake') => ipcRenderer.invoke('tor:fetch-bridges', transport),
+
+    syncBinaries: () => ipcRenderer.invoke('tor:sync-binaries'),
     shouldUseTor: (url: string, torMode: boolean) =>
       ipcRenderer.invoke('tor:should-use-tor', url, torMode),
   },
@@ -812,12 +882,9 @@ const electronAPI: ElectronAPI = {
   },
   vpn: {
     getStatus: () => ipcRenderer.invoke('vpn:get-status'),
-    getServers: () => ipcRenderer.invoke('vpn:get-servers'),
-    getPlans: () => ipcRenderer.invoke('vpn:get-plans'),
-    getSelectedServer: () => ipcRenderer.invoke('vpn:get-selected-server'),
-    getSelectedPlan: () => ipcRenderer.invoke('vpn:get-selected-plan'),
-    setServer: (countryCode) => ipcRenderer.invoke('vpn:set-server', countryCode),
-    setPlan: (planId) => ipcRenderer.invoke('vpn:set-plan', planId),
+    importConfig: (rawConfig) => ipcRenderer.invoke('vpn:import-config', rawConfig),
+    getConfig: () => ipcRenderer.invoke('vpn:get-config'),
+    clearConfig: () => ipcRenderer.invoke('vpn:clear-config'),
     connect: () => ipcRenderer.invoke('vpn:connect'),
     disconnect: () => ipcRenderer.invoke('vpn:disconnect'),
     isModeEnabled: () => ipcRenderer.invoke('vpn:is-mode-enabled'),
@@ -868,6 +935,24 @@ const electronAPI: ElectronAPI = {
   apiKeys: {
     getAll: () => ipcRenderer.invoke('api-keys:get-all'),
     setAll: (keys) => ipcRenderer.invoke('api-keys:set-all', keys),
+  },
+  ollama: {
+    listModels: () => ipcRenderer.invoke('ollama:list-models'),
+  },
+  tab: {
+    extractContent: (tabId) => ipcRenderer.invoke('tab:extract-content', tabId),
+    extractAllContent: () => ipcRenderer.invoke('tab:extract-all-content'),
+  },
+  updater: {
+    getState: () => ipcRenderer.invoke('updater:get-state'),
+    check: () => ipcRenderer.invoke('updater:check'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('updater:set-enabled', enabled),
+    quitAndInstall: () => ipcRenderer.invoke('updater:quit-and-install'),
+    onStatus: (callback: (state: UpdaterState) => void) => {
+      const handler = (_event: IpcRendererEvent, state: UpdaterState) => callback(state);
+      ipcRenderer.on('updater:status', handler);
+      return () => ipcRenderer.off('updater:status', handler);
+    },
   },
 };
 

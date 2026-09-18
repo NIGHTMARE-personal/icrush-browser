@@ -75,7 +75,15 @@ export function generateSensitiveFieldDetectionJS(): string {
  * Generate JavaScript to highlight an element with a visual feedback effect.
  * Used by the agent to show the user what element it's interacting with.
  */
+/** Sanitize color to prevent CSS injection — only allows hex, rgb(), rgba() */
+function sanitizeColor(color: string): string {
+  if (/^#[0-9a-fA-F]{3,8}$/.test(color)) return color;
+  if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*[\d.]+\s*)?\)$/.test(color)) return color;
+  return '#6366f1'; // default fallback
+}
+
 export function generateHighlightJS(selector: string, color: string = '#6366f1', duration: number = 1500): string {
+  const safeColor = sanitizeColor(color);
   return `
     (function() {
       function queryDeep(sel, root = document) {
@@ -95,8 +103,8 @@ export function generateHighlightJS(selector: string, color: string = '#6366f1',
       const originalTransition = el.style.transition;
       
       el.style.transition = 'outline 0.2s, box-shadow 0.2s';
-      el.style.outline = '3px solid ${color}';
-      el.style.boxShadow = '0 0 20px ${color}40, 0 0 40px ${color}20';
+      el.style.outline = '3px solid ${safeColor}';
+      el.style.boxShadow = '0 0 20px ${safeColor}40, 0 0 40px ${safeColor}20';
       
       setTimeout(() => {
         el.style.outline = originalOutline;
@@ -115,6 +123,7 @@ export function generateHighlightJS(selector: string, color: string = '#6366f1',
  * Generate JavaScript to show a tooltip near an element.
  */
 export function generateTooltipJS(selector: string, text: string, color: string = '#6366f1'): string {
+  const safeColor = sanitizeColor(color);
   return `
     (function() {
       function queryDeep(sel, root = document) {
@@ -138,7 +147,7 @@ export function generateTooltipJS(selector: string, text: string, color: string 
         z-index: 999999;
         padding: 6px 12px;
         border-radius: 6px;
-        background: ${color};
+        background: ${safeColor};
         color: white;
         font-size: 12px;
         font-weight: 600;

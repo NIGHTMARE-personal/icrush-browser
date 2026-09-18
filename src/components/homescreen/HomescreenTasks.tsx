@@ -306,24 +306,30 @@ export function HomescreenTasks() {
         <button onClick={addTask}>Add</button>
       </div>
 
-      <ul className="tasks-list">
-        {tasks.map(task => (
-          <li key={task.id} className={`tasks-item${task.completed ? ' completed' : ''}`}>
-            <input
-              type="checkbox"
-              className="tasks-checkbox"
-              checked={task.completed}
-              onChange={() => toggleTask(task.id)}
-            />
-            <span className="tasks-text">{task.text}</span>
-            <div className="tasks-move-btns">
-              <button onClick={() => moveTask(task.id, -1)} title="Move up">▲</button>
-              <button onClick={() => moveTask(task.id, 1)} title="Move down">▼</button>
-            </div>
-            <button className="tasks-delete" onClick={() => deleteTask(task.id)} title="Delete task">✕</button>
-          </li>
-        ))}
-      </ul>
+      {tasks.length === 0 ? (
+        <div className="tasks-empty-state" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+          No tasks yet — add one above!
+        </div>
+      ) : (
+        <ul className="tasks-list">
+          {tasks.map(task => (
+            <li key={task.id} className={`tasks-item${task.completed ? ' completed' : ''}`}>
+              <input
+                type="checkbox"
+                className="tasks-checkbox"
+                checked={task.completed}
+                onChange={() => toggleTask(task.id)}
+              />
+              <span className="tasks-text">{task.text}</span>
+              <div className="tasks-move-btns">
+                <button onClick={() => moveTask(task.id, -1)} title="Move up">▲</button>
+                <button onClick={() => moveTask(task.id, 1)} title="Move down">▼</button>
+              </div>
+              <button className="tasks-delete" onClick={() => deleteTask(task.id)} title="Delete task">✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {totalCount > 0 && (
         <div className="tasks-progress-bar">

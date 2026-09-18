@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from './Toast';
 
 interface Tab {
   id: string;
@@ -50,6 +51,7 @@ export function WorkspacesMindMap({
   onCloseTab,
   onNavigate,
 }: WorkspacesMindMapProps) {
+  const { warning } = useToast();
   // Current active states
   const [activeWsId, setActiveWsId] = useState<string>(() => {
     return workspaces[0]?.id || 'default';
@@ -162,7 +164,7 @@ export function WorkspacesMindMap({
   const handleDeleteDocument = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (id === 'primary') {
-      alert('Primary Notes document cannot be deleted.');
+      warning('Primary Notes document cannot be deleted.');
       return;
     }
     if (confirm('Delete this document?')) {

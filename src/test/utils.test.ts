@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { normalizeUrl, isSearchQuery, formatUrlForDisplay } from '../utils/url';
+import { normalizeUrl, isSearchQuery, formatUrlForDisplay, isOnionAddress, ensureOnionUrl, shouldUseTorForUrl } from '../utils/url';
 import { storage } from '../utils/storage';
 import { generateUUID } from '../utils/uuid';
 
@@ -266,7 +266,7 @@ describe('Bookmark Storage', () => {
     expect(allTags).toContain('news');
   });
 
-  it('should support HTML import and export', async () => {
+    it('should support HTML import and export', async () => {
     const { bookmarkStorage } = await import('../utils/bookmarks');
     bookmarkStorage.addBookmark({ title: 'Google', url: 'https://google.com' });
     bookmarkStorage.addBookmark({ title: 'Bing', url: 'https://bing.com' });
@@ -285,5 +285,127 @@ describe('Bookmark Storage', () => {
     const count = bookmarkStorage.importFromHTML(html);
     expect(count).toBe(2);
     expect(bookmarkStorage.getBookmarks()).toHaveLength(2);
+  });
+});
+
+describe('Onion Address Utilities', () => {
+  describe('isOnionAddress', () => {
+    it('should detect .onion addresses', () => {
+      expect(isOnionAddress('http://abc123.onion')).toBe(true);
+      expect(isOnionAddress('https://facebook.onion/path')).toBe(true);
+      expect(isOnionAddress('abc1234567890abc.onion')).toBe(true);
+    });
+
+    it('should reject non-onion addresses', () => {
+      expect(isOnionAddress('https://example.com')).toBe(false);
+      expect(isOnionAddress('http://google.com')).toBe(false);
+      expect(isOnionAddress('not-a-url')).toBe(false);
+    });
+
+    it('should handle empty/invalid input', () => {
+      expect(isOnionAddress('')).toBe(false);
+      expect(isOnionAddress('   ')).toBe(false);
+    });
+  });
+
+  describe('ensureOnionUrl', () => {
+    it('should add http:// to bare onion addresses', () => {
+      expect(ensureOnionUrl('abc123.onion')).toBe('http://abc123.onion');
+    });
+
+    it('should keep existing protocol', () => {
+      expect(ensureOnionUrl('http://abc123.onion')).toBe('http://abc123.onion');
+      expect(ensureOnionUrl('https://abc123.onion')).toBe('https://abc123.onion');
+    });
+  });
+
+  describe('shouldUseTorForUrl', () => {
+    it('should always use Tor for .onion addresses', () => {
+      expect(shouldUseTorForUrl('http://abc123.onion', false)).toBe(true);
+      expect(shouldUseTorForUrl('http://abc123.onion', true)).toBe(true);
+    });
+
+    it('should respect torMode for non-onion addresses', () => {
+      expect(shouldUseTorForUrl('https://example.com', false)).toBe(false);
+      expect(shouldUseTorForUrl('https://example.com', true)).toBe(true);
+    });
+  });
+});
+
+describe('normalizeUrl Edge Cases', () => {
+  it('should handle search?q= typo correction', () => {
+    expect(normalizeUrl('google.com/search?q-test')).toBe('https://google.com/search?q=test');
+    expect(normalizeUrl('google.com/search?q:test')).toBe('https://google.com/search?q=test');
+  });
+
+  it('should handle bare search?q= prefix', () => {
+    expect(normalizeUrl('search?q=hello')).toContain('search?q=hello');
+  });
+
+  it('should handle YouTube site-specific search', () => {
+    const result = normalizeUrl('cats site:youtube.com');
+    expect(result).toContain('youtube.com/results?search_query=cats');
+  });
+
+  it('should handle .onion addresses', () => {
+    expect(normalizeUrl('abc123.onion')).toBe('http://abc123.onion');
+    expect(normalizeUrl('https://abc123.onion')).toBe('https://abc123.onion');
+  });
+
+  it('should handle known site names as navigation', () => {
+    expect(normalizeUrl('reddit')).toBe('https://www.reddit.com');
+    expect(normalizeUrl('youtube')).toBe('https://www.youtube.com');
+    expect(normalizeUrl('github')).toBe('https://www.github.com');
+    expect(normalizeUrl('chatgpt')).toBe('https://chat.openai.com');
+    expect(normalizeUrl('claude')).toBe('https://claude.ai');
+  });
+
+  it('should handle about:blank', () => {
+    expect(normalizeUrl('about:blank')).toBe('about:blank');
+  });
+
+  it('should handle localhost with port', () => {
+    expect(normalizeUrl('localhost:3000')).toBe('https://localhost:3000');
+  });
+
+  it('should handle IP addresses', () => {
+    expect(normalizeUrl('192.168.1.1')).toBe('https://192.168.1.1');
+    expect(normalizeUrl('10.0.0.1:8080')).toBe('https://10.0.0.1:8080');
+  });
+
+  it('should preserve file:// and chrome:// protocols', () => {
+    expect(normalizeUrl('file:///C:/test.txt')).toBe('file:///C:/test.txt');
+    expect(normalizeUrl('chrome://settings')).toBe('chrome://settings');
+  });
+});
+
+describe('isSearchQuery Edge Cases', () => {
+  it('should detect known site names as navigation (not search)', () => {
+    expect(isSearchQuery('reddit')).toBe(false);
+    expect(isSearchQuery('youtube')).toBe(false);
+    expect(isSearchQuery('github')).toBe(false);
+    expect(isSearchQuery('chatgpt')).toBe(false);
+    expect(isSearchQuery('claude')).toBe(false);
+    expect(isSearchQuery('gemini')).toBe(false);
+  });
+
+  it('should detect domains with ports', () => {
+    expect(isSearchQuery('localhost:3000')).toBe(false);
+    expect(isSearchQuery('example.com:8080')).toBe(false);
+  });
+
+  it('should detect domains with paths', () => {
+    expect(isSearchQuery('github.com/user/repo')).toBe(false);
+    expect(isSearchQuery('example.com/page?q=1')).toBe(false);
+  });
+
+  it('should treat multi-word non-site strings as search', () => {
+    expect(isSearchQuery('how to cook rice')).toBe(true);
+    expect(isSearchQuery('best restaurants near me')).toBe(true);
+  });
+
+  it('should treat single unknown words as search', () => {
+    expect(isSearchQuery('asdkljfasd')).toBe(true);
+    expect(isSearchQuery('randomword')).toBe(true);
   });
 });

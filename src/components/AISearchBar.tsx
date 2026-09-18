@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { storage } from '../utils/storage';
 import { PROVIDERS } from '../utils/providers';
+import { useToast } from './Toast';
 
 interface AISearchBarProps {
   onNavigate: (url: string) => void;
@@ -30,6 +31,7 @@ export function AISearchBar({
   onSelectEngine,
   isEditing = false,
 }: AISearchBarProps) {
+  const { error } = useToast();
   const [mode, setMode] = useState<SearchMode>('web');
   const [searchValue, setSearchValue] = useState('');
   const [promptValue, setPromptValue] = useState('');
@@ -89,7 +91,7 @@ export function AISearchBar({
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      alert('File too large. Maximum size is 10MB.');
+      error('File too large. Maximum size is 10MB.');
       return;
     }
 

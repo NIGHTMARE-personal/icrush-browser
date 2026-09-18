@@ -42,8 +42,21 @@ class AgentMemoryVault {
         this.legacyPath = path_1.default.join(userData, 'agent-memory.json');
     }
     getFallbackKey() {
-        const machineId = `${process.env.COMPUTERNAME || 'host'}-${process.env.USERNAME || 'user'}-icrush-vault`;
-        return crypto_1.default.pbkdf2Sync(machineId, 'icrush-salt-v1', 100000, 32, 'sha256');
+        // SECURITY: Use a random key stored on disk instead of predictable env vars
+        const keyPath = path_1.default.join(electron_1.app.getPath('userData'), '.vault-key');
+        try {
+            if (fs_1.default.existsSync(keyPath)) {
+                return Buffer.from(fs_1.default.readFileSync(keyPath, 'hex'));
+            }
+        }
+        catch { /* fall through to generate new key */ }
+        // Generate a new random key and save it
+        const key = crypto_1.default.randomBytes(32);
+        try {
+            fs_1.default.writeFileSync(keyPath, key.toString('hex'), { mode: 0o600 });
+        }
+        catch { /* best effort — will regenerate next time */ }
+        return key;
     }
     encrypt(plainText) {
         if (electron_1.safeStorage.isEncryptionAvailable()) {

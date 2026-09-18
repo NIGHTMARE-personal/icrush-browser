@@ -41,7 +41,7 @@ export function ProfileDropdown({
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([
-    { id: '1', name: 'Amits', email: 'amits@icrushbrowser.com' },
+    { id: '1', name: 'NIGHTMARE', email: 'nightmare@icrushbrowser.com' },
     { id: '2', name: 'Work Profile', email: 'work@icrushbrowser.com' },
     { id: '3', name: 'Guest User', email: 'guest@icrushbrowser.com' },
   ]);
@@ -73,8 +73,8 @@ export function ProfileDropdown({
       setProfiles([
         {
           id: '1',
-          name: localStorage.getItem('gemini-browser-profile-name-1') || 'Amits',
-          email: localStorage.getItem('gemini-browser-profile-email-1') || 'amits@icrushbrowser.com',
+          name: localStorage.getItem('gemini-browser-profile-name-1') || 'NIGHTMARE',
+          email: localStorage.getItem('gemini-browser-profile-email-1') || 'nightmare@icrushbrowser.com',
         },
         {
           id: '2',
@@ -105,8 +105,8 @@ export function ProfileDropdown({
       setProfiles([
         {
           id: '1',
-          name: localStorage.getItem('gemini-browser-profile-name-1') || 'Amits',
-          email: localStorage.getItem('gemini-browser-profile-email-1') || 'amits@icrushbrowser.com',
+          name: localStorage.getItem('gemini-browser-profile-name-1') || 'NIGHTMARE',
+          email: localStorage.getItem('gemini-browser-profile-email-1') || 'nightmare@icrushbrowser.com',
         },
         {
           id: '2',

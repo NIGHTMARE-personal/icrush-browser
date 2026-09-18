@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../utils/supabase';
 import { ContextMenu, ContextMenuAction } from './ContextMenu';
+import { useToast } from './Toast';
 
 interface HistoryDashboardProps {
   onNavigate: (url: string) => void;
@@ -22,6 +23,7 @@ interface GroupedDomain {
 }
 
 export function HistoryDashboard({ onNavigate, onCreateTab }: HistoryDashboardProps) {
+  const { success } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [groupedHistory, setGroupedHistory] = useState<GroupedDomain[]>([]);
   const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({});
@@ -171,7 +173,7 @@ export function HistoryDashboard({ onNavigate, onCreateTab }: HistoryDashboardPr
         onCreateTab(entry.url);
         break;
       case 'copyUrl':
-        navigator.clipboard.writeText(entry.url).catch(() => {});
+        navigator.clipboard.writeText(entry.url).then(() => success('URL copied')).catch(() => {});
         break;
       case 'deleteEntry':
         handleDeleteEntry({} as React.MouseEvent, entry.id, entry.url);

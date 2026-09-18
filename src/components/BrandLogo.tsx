@@ -15,7 +15,7 @@ export function BrandLogo({
   showText = false,
   subtitle = 'NIGHTMARE PROJECTS',
 }: BrandLogoProps) {
-  const isDark = (localStorage.getItem('homescreen_theme_mode') || 'deep-canvas') === 'deep-canvas';
+  const isDark = (localStorage.getItem('homescreen-theme-mode') || 'deep-canvas') === 'deep-canvas';
 
   const primaryColor = variant === 'terracotta' ? '#C86D51' : variant === 'monochrome' ? (isDark ? '#fff' : '#000') : '#f2ca50';
   const secondaryColor = variant === 'terracotta' ? '#e28d73' : variant === 'monochrome' ? (isDark ? '#aaa' : '#444') : '#d4af37';

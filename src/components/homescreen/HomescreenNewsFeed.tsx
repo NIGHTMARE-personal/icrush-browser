@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 
 interface NewsItem {
   id: string;
@@ -11,36 +11,6 @@ interface NewsItem {
 
 type Category = NewsItem['category'];
 
-const NEWS_DATA: NewsItem[] = [
-  { id: 't1', title: 'Apple Vision Pro 2 reportedly in mass production with slimmer design', source: 'The Verge', url: 'https://www.theverge.com', timeAgo: '12m', category: 'tech' },
-  { id: 't2', title: 'Qualcomm Snapdragon X Elite laptops dominate Q3 sales charts', source: 'Ars Technica', url: 'https://arstechnica.com', timeAgo: '34m', category: 'tech' },
-  { id: 't3', title: 'Firefox 140 ships with major performance overhaul for JavaScript engine', source: 'Mozilla Blog', url: 'https://blog.mozilla.org', timeAgo: '1h', category: 'tech' },
-  { id: 't4', title: 'Steam Deck 2 leaks reveal 120Hz OLED and double the battery life', source: 'PC Gamer', url: 'https://www.pcgamer.com', timeAgo: '2h', category: 'tech' },
-  { id: 't5', title: 'Linux 7.0 kernel merges native Rust driver support for GPU modules', source: 'Phoronix', url: 'https://www.phoronix.com', timeAgo: '3h', category: 'tech' },
-  { id: 't6', title: 'React 20 introduces zero-bundle streaming server components', source: 'React Blog', url: 'https://react.dev/blog', timeAgo: '4h', category: 'tech' },
-
-  { id: 'a1', title: 'OpenAI announces GPT-5 with real-time reasoning and 1M token context', source: 'TechCrunch', url: 'https://techcrunch.com', timeAgo: '18m', category: 'ai' },
-  { id: 'a2', title: 'DeepMind solves new protein folding benchmark with 99.8% accuracy', source: 'Nature', url: 'https://www.nature.com', timeAgo: '45m', category: 'ai' },
-  { id: 'a3', title: 'Anthropic releases Claude Agent Framework for autonomous tool use', source: 'VentureBeat', url: 'https://venturebeat.com', timeAgo: '1h', category: 'ai' },
-  { id: 'a4', title: 'Stable Diffusion 5 generates photorealistic video from a single image', source: 'MIT Tech Review', url: 'https://www.technologyreview.com', timeAgo: '2h', category: 'ai' },
-  { id: 'a5', title: 'EU passes AI Act enforcement framework with fines up to 7% of revenue', source: 'Reuters', url: 'https://www.reuters.com', timeAgo: '3h', category: 'ai' },
-  { id: 'a6', title: 'Meta releases open-source multimodal model rivaling GPT-5 benchmarks', source: 'AI News', url: 'https://www.artificialintelligence-news.com', timeAgo: '5h', category: 'ai' },
-
-  { id: 'f1', title: 'Fed signals rate pause as inflation cools to 2.3% in latest CPI report', source: 'Bloomberg', url: 'https://www.bloomberg.com', timeAgo: '25m', category: 'finance' },
-  { id: 'f2', title: 'Bitcoin breaks $125,000 following institutional ETF inflow record week', source: 'CoinDesk', url: 'https://www.coindesk.com', timeAgo: '1h', category: 'finance' },
-  { id: 'f3', title: 'S&P 500 hits all-time high as tech earnings beat expectations across board', source: 'CNBC', url: 'https://www.cnbc.com', timeAgo: '2h', category: 'finance' },
-  { id: 'f4', title: 'Toyota announces $30B investment in solid-state battery manufacturing', source: 'Financial Times', url: 'https://www.ft.com', timeAgo: '3h', category: 'finance' },
-  { id: 'f5', title: 'India surpasses Japan as third-largest economy by nominal GDP', source: 'The Economist', url: 'https://www.economist.com', timeAgo: '4h', category: 'finance' },
-  { id: 'f6', title: 'NVIDIA market cap briefly touches $5 trillion on AI chip demand surge', source: 'MarketWatch', url: 'https://www.marketwatch.com', timeAgo: '6h', category: 'finance' },
-
-  { id: 'w1', title: 'UN Security Council votes unanimously on Gaza ceasefire framework', source: 'BBC News', url: 'https://www.bbc.com', timeAgo: '15m', category: 'world' },
-  { id: 'w2', title: 'Japan and South Korea announce joint semiconductor supply chain pact', source: 'NHK World', url: 'https://www3.nhk.or.jp/nhkworld', timeAgo: '1h', category: 'world' },
-  { id: 'w3', title: 'Brazil leads Amazon reforestation initiative with $5B international fund', source: 'Al Jazeera', url: 'https://www.aljazeera.com', timeAgo: '2h', category: 'world' },
-  { id: 'w4', title: 'SpaceX Starship completes first orbital flight to Mars staging orbit', source: 'Space.com', url: 'https://www.space.com', timeAgo: '3h', category: 'world' },
-  { id: 'w5', title: 'WHO declares end to mpox global health emergency after vaccination push', source: 'The Guardian', url: 'https://www.theguardian.com', timeAgo: '5h', category: 'world' },
-  { id: 'w6', title: 'European Parliament approves sweeping digital identity regulation', source: 'Politico Europe', url: 'https://www.politico.eu', timeAgo: '7h', category: 'world' },
-];
-
 const CATEGORY_LABELS: Record<Category, string> = {
   tech: 'Tech',
   ai: 'AI & ML',
@@ -50,12 +20,54 @@ const CATEGORY_LABELS: Record<Category, string> = {
 
 const CATEGORY_ORDER: Category[] = ['tech', 'ai', 'finance', 'world'];
 
+const FALLBACK_NEWS: Record<Category, NewsItem[]> = {
+  tech: [
+    { id: 't1', title: 'Loading tech news...', source: '', url: '', timeAgo: '', category: 'tech' },
+  ],
+  ai: [
+    { id: 'a1', title: 'Loading AI news...', source: '', url: '', timeAgo: '', category: 'ai' },
+  ],
+  finance: [
+    { id: 'f1', title: 'Loading finance news...', source: '', url: '', timeAgo: '', category: 'finance' },
+  ],
+  world: [
+    { id: 'w1', title: 'Loading world news...', source: '', url: '', timeAgo: '', category: 'world' },
+  ],
+};
+
 interface HomescreenNewsFeedProps {
   onNavigate?: (url: string) => void;
 }
 
 export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
   const [activeTab, setActiveTab] = useState<Category>('tech');
+  const [news, setNews] = useState<Record<Category, NewsItem[]>>(FALLBACK_NEWS);
+  const [loading, setLoading] = useState<Record<Category, boolean>>({
+    tech: false, ai: false, finance: false, world: false,
+  });
+  const fetchedRef = useRef<Set<Category>>(new Set());
+
+  const fetchFeed = useCallback(async (category: Category) => {
+    if (fetchedRef.current.has(category)) return;
+    fetchedRef.current.add(category);
+
+    setLoading(prev => ({ ...prev, [category]: true }));
+    try {
+      const items = await window.electronAPI.news.fetchFeed(category);
+      if (items && items.length > 0) {
+        setNews(prev => ({ ...prev, [category]: items as NewsItem[] }));
+      }
+    } catch {
+      // Keep fallback data
+    } finally {
+      setLoading(prev => ({ ...prev, [category]: false }));
+    }
+  }, []);
+
+  // Fetch on mount for the active tab
+  useEffect(() => {
+    fetchFeed(activeTab);
+  }, [activeTab, fetchFeed]);
 
   const handleTabChange = useCallback((tab: Category) => {
     setActiveTab(tab);
@@ -63,6 +75,7 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
 
   const handleItemClick = useCallback(
     (url: string) => {
+      if (!url) return;
       if (onNavigate) {
         onNavigate(url);
       } else {
@@ -72,12 +85,29 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
     [onNavigate]
   );
 
-  const filteredNews = NEWS_DATA.filter((item) => item.category === activeTab);
+  const handleRefresh = useCallback(() => {
+    fetchedRef.current.delete(activeTab);
+    fetchFeed(activeTab);
+  }, [activeTab, fetchFeed]);
+
+  const filteredNews = news[activeTab] || [];
+  const isLoading = loading[activeTab];
 
   return (
     <div className="homescreen-newsfeed">
       <div className="newsfeed-header">
         <span className="newsfeed-header-title">Headlines</span>
+        <button
+          className="newsfeed-refresh"
+          onClick={handleRefresh}
+          disabled={isLoading}
+          title="Refresh feed"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isLoading ? 'spin 1s linear infinite' : 'none' }}>
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </button>
       </div>
       <div className="newsfeed-tabs">
         {CATEGORY_ORDER.map((cat) => (
@@ -91,16 +121,20 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
         ))}
       </div>
       <div className="newsfeed-list">
+        {filteredNews.length === 0 && !isLoading && (
+          <div className="newsfeed-empty">No articles found</div>
+        )}
         {filteredNews.map((item) => (
           <button
             key={item.id}
             className="newsfeed-item"
             onClick={() => handleItemClick(item.url)}
+            disabled={!item.url}
           >
             <div className="newsfeed-item-title">{item.title}</div>
             <div className="newsfeed-item-meta">
-              <span className="newsfeed-item-source">{item.source}</span>
-              <span className="newsfeed-item-time">{item.timeAgo} ago</span>
+              {item.source && <span className="newsfeed-item-source">{item.source}</span>}
+              {item.timeAgo && <span className="newsfeed-item-time">{item.timeAgo} ago</span>}
             </div>
           </button>
         ))}
@@ -134,6 +168,7 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
         .newsfeed-header {
           display: flex;
           align-items: center;
+          justify-content: space-between;
           margin-bottom: 16px;
         }
 
@@ -142,6 +177,34 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
           font-weight: 600;
           letter-spacing: 0.5px;
           color: #f4f0ea;
+        }
+
+        .newsfeed-refresh {
+          background: none;
+          border: none;
+          color: #94a3b8;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.15s, background 0.15s;
+        }
+
+        .newsfeed-refresh:hover {
+          color: #f4f0ea;
+          background: rgba(255, 255, 255, 0.06);
+        }
+
+        .newsfeed-refresh:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
 
         .newsfeed-tabs {
@@ -190,6 +253,13 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
           flex-direction: column;
         }
 
+        .newsfeed-empty {
+          text-align: center;
+          padding: 20px;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
         .newsfeed-item {
           display: flex;
           flex-direction: column;
@@ -214,6 +284,10 @@ export function HomescreenNewsFeed({ onNavigate }: HomescreenNewsFeedProps) {
 
         .newsfeed-item:hover {
           background: rgba(255, 255, 255, 0.03);
+        }
+
+        .newsfeed-item:disabled {
+          cursor: default;
         }
 
         .newsfeed-item-title {

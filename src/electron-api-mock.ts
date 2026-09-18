@@ -86,6 +86,12 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
       tooltip: async () => ({ jsCode: '' }),
       clickRipple: async () => ({ jsCode: '' }),
       runSkill: async (skillId) => ({ thought: 'Running skill', action: 'finish', answer: 'Done' }),
+      getPolicy: async () => ({ version: 1, defaultMaxTier: 'sensitive', sites: {} }),
+      setSitePolicy: async (policy) => ({ ...policy, updatedAt: Date.now() }),
+      getAuditLog: async () => [],
+      clearAuditLog: async () => true,
+      checkNavigation: async () => ({ crosses: false, reasons: [] }),
+      onAuditEvent: (callback) => dummyUnsubscribe(),
     },
 
     mcp: {
@@ -168,6 +174,18 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
         path: url,
         enabled: true,
       }),
+      analyzeUrl: async (url: string) => ({
+        reportId: `rep-mock-${Date.now()}`,
+        report: {
+          name: 'Web Store Extension',
+          version: '1.0.0',
+          manifestVersion: 3,
+          permissions: ['storage'],
+          hostPermissions: [],
+          riskLevel: 'low',
+          findings: ['standard permission set'],
+        },
+      }),
     },
     
     downloads: {
@@ -179,7 +197,7 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
       open: async (id) => {},
       remove: async (id) => true,
       clearCompleted: async () => true,
-      getSaveDir: async () => 'C:\\Users\\Amits\\Downloads',
+      getSaveDir: async () => '~/Downloads',
       setSaveDir: async (dir) => true,
       setPriority: async (id, priority) => true,
       onCreated: (callback) => dummyUnsubscribe(),
@@ -401,6 +419,13 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
       onZoomOut: (callback) => dummyUnsubscribe(),
       onZoomReset: (callback) => dummyUnsubscribe(),
       onDevTools: (callback) => dummyUnsubscribe(),
+    },
+    updater: {
+      getState: async () => ({ status: 'unavailable', enabled: true, appVersion: '1.0.0-mock' }),
+      check: async () => ({ status: 'unavailable', enabled: true, appVersion: '1.0.0-mock' }),
+      setEnabled: async (enabled) => ({ status: 'unavailable', enabled, appVersion: '1.0.0-mock' }),
+      quitAndInstall: async () => true,
+      onStatus: (callback) => dummyUnsubscribe(),
     },
   } as any;
 }

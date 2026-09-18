@@ -12,21 +12,12 @@ export function HomescreenNotes({ onNavigate }: HomescreenNotesProps) {
   useEffect(() => {
     const saved = localStorage.getItem("gemini-browser-notes");
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.notes) setNotes(parsed.notes);
-        if (parsed.title) setTitle(parsed.title);
-      } catch {
-        setNotes(saved);
-      }
+      setNotes(saved);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      "gemini-browser-notes",
-      JSON.stringify({ notes, title })
-    );
+    localStorage.setItem("gemini-browser-notes", notes);
     window.dispatchEvent(new CustomEvent("notes-updated", { detail: { notes, title } }));
   }, [notes, title]);
 

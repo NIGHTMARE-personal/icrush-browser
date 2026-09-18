@@ -83,7 +83,7 @@ const IconUploadCloud = () => (
 );
 
 export function ProfileModal({ isOpen, onClose, onSave, onOpenSettings }: ProfileModalProps) {
-  const isDark = (localStorage.getItem('homescreen_theme_mode') || 'deep-canvas') === 'deep-canvas';
+  const isDark = (localStorage.getItem('homescreen-theme-mode') || 'deep-canvas') === 'deep-canvas';
 
   const [activeTab, setActiveTab] = useState<'identity' | 'sync' | 'profiles' | 'avatar'>('identity');
   const [activeProfileId, setActiveProfileId] = useState('1');
@@ -99,6 +99,7 @@ export function ProfileModal({ isOpen, onClose, onSave, onOpenSettings }: Profil
   const [syncExtensions, setSyncExtensions] = useState(true);
   const [syncSettings, setSyncSettings] = useState(true);
   const [syncTabs, setSyncTabs] = useState(true);
+  const [syncAI, setSyncAI] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Just now');
   const [isSyncingNow, setIsSyncingNow] = useState(false);
 
@@ -146,6 +147,7 @@ export function ProfileModal({ isOpen, onClose, onSave, onOpenSettings }: Profil
       setSyncExtensions(localStorage.getItem('sync_extensions') !== 'false');
       setSyncSettings(localStorage.getItem('sync_settings') !== 'false');
       setSyncTabs(localStorage.getItem('sync_tabs') !== 'false');
+      setSyncAI(localStorage.getItem('sync_ai') !== 'false');
 
       setImageSrc(savedAvatar || null);
       setZoom(1);
@@ -208,9 +210,9 @@ export function ProfileModal({ isOpen, onClose, onSave, onOpenSettings }: Profil
     localStorage.setItem('gemini-browser-active-profile-id', profileId);
 
     const savedName = localStorage.getItem(`gemini-browser-profile-name-${profileId}`) ||
-                      (profileId === '1' ? 'Amits' : profileId === '2' ? 'Work Profile' : 'Guest User');
+                      (profileId === '1' ? 'NIGHTMARE' : profileId === '2' ? 'Work Profile' : 'Guest User');
     const savedEmail = localStorage.getItem(`gemini-browser-profile-email-${profileId}`) ||
-                       (profileId === '1' ? 'amits@icrushbrowser.com' : profileId === '2' ? 'work@icrushbrowser.com' : 'guest@icrushbrowser.com');
+                       (profileId === '1' ? 'nightmare@icrushbrowser.com' : profileId === '2' ? 'work@icrushbrowser.com' : 'guest@icrushbrowser.com');
     const savedAvatar = localStorage.getItem(`gemini-browser-profile-pic-${profileId}`) || '';
 
     setUsername(savedName);
@@ -254,6 +256,7 @@ export function ProfileModal({ isOpen, onClose, onSave, onOpenSettings }: Profil
     localStorage.setItem('sync_extensions', String(syncExtensions));
     localStorage.setItem('sync_settings', String(syncSettings));
     localStorage.setItem('sync_tabs', String(syncTabs));
+    localStorage.setItem('sync_ai', String(syncAI));
 
     // 3. Save Avatar if modified
     if (imageSrc) {

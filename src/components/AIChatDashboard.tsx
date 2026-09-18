@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChatMessage } from '../utils/storage';
-import { PROVIDERS } from '../utils/providers';
+import { PROVIDERS, detectLocalModels, type LocalModel } from '../utils/providers';
 import * as aiSessions from '../utils/aiSessions';
 
 interface AIChatDashboardProps {
@@ -27,6 +27,8 @@ function getProviderForModel(modelId: string): string {
   if (modelId.startsWith('gpt')) return 'openai';
   if (modelId.startsWith('deepseek')) return 'openrouter';
   if (modelId === 'ollama-local') return 'local';
+  // Actual Ollama model IDs (e.g. qwen2.5:3b, llama3.2:1b, dolphin-phi:latest)
+  if (modelId.includes(':') || modelId.includes('llama') || modelId.includes('qwen') || modelId.includes('dolphin') || modelId.includes('phi') || modelId.includes('mixtral') || modelId.includes('gemma') || modelId.includes('aureus')) return 'local';
   return 'gemini';
 }
 
@@ -281,7 +283,7 @@ export function AIChatDashboard({
   apiKeys = {},
 }: AIChatDashboardProps) {
   // Theme state
-  const isDark = (localStorage.getItem('homescreen_theme_mode') || 'deep-canvas') === 'deep-canvas';
+  const isDark = (localStorage.getItem('homescreen-theme-mode') || 'deep-canvas') === 'deep-canvas';
 
   // Sessions and Active Chat — synced with sidebar via shared store
   const [sessions, setSessions] = useState<aiSessions.AISession[]>(() => aiSessions.load());
@@ -298,6 +300,11 @@ export function AIChatDashboard({
   const [selectedPersona, setSelectedPersona] = useState('general');
   const [webGrounding, setWebGrounding] = useState(true);
   const [includeTabContext, setIncludeTabContext] = useState(false);
+  const [localModels, setLocalModels] = useState<LocalModel[]>([]);
+
+  useEffect(() => {
+    detectLocalModels().then(models => setLocalModels(models));
+  }, []);
 
   const [inputPrompt, setInputPrompt] = useState(initialPrompt);
   const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; data: string; mimeType: string }>>([]);
@@ -581,7 +588,7 @@ export function AIChatDashboard({
         historyForApi,
         provider,
         apiKeys[provider] || undefined,
-        { files, systemInstruction }
+        { files, systemInstruction, modelName: selectedModel }
       );
       // Response arrives via onGeminiResponse / onGeminiDone / onGeminiError listeners
     } catch (err: any) {
@@ -733,9 +740,17 @@ export function AIChatDashboard({
               </optgroup>
             ))}
             <optgroup label="Local Ollama">
-              <option value="ollama-local" style={{ background: isDark ? '#121218' : '#ffffff', color: isDark ? '#fff' : '#000' }}>
-                Auto-detect installed model
-              </option>
+              {localModels.length > 0 ? (
+                localModels.map(m => (
+                  <option key={m.id} value={m.id} style={{ background: isDark ? '#121218' : '#ffffff', color: isDark ? '#fff' : '#000' }}>
+                    {m.name}{m.parameterSize ? ` (${m.parameterSize})` : ''}{m.size ? ` ${m.size}` : ''}
+                  </option>
+                ))
+              ) : (
+                <option value="ollama-local" style={{ background: isDark ? '#121218' : '#ffffff', color: isDark ? '#fff' : '#000' }}>
+                  Auto-detect installed model
+                </option>
+              )}
             </optgroup>
           </select>
         </div>

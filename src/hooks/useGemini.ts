@@ -16,10 +16,11 @@ interface GeminiErrorInfo {
 
 interface UseGeminiOptions {
   onExecuteCommand?: (commands: BrowserCommand[]) => void;
+  onDone?: () => void;
   activeProvider?: string;
 }
 
-export function useGemini({ onExecuteCommand, activeProvider }: UseGeminiOptions = {}) {
+export function useGemini({ onExecuteCommand, onDone, activeProvider }: UseGeminiOptions = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     return storage.getChatHistory();
   });
@@ -97,6 +98,7 @@ export function useGemini({ onExecuteCommand, activeProvider }: UseGeminiOptions
         return prev;
       });
       setIsLoading(false);
+      if (onDone) onDone();
     });
 
     const unsubscribeError = window.electronAPI.onGeminiError(
@@ -137,7 +139,7 @@ export function useGemini({ onExecuteCommand, activeProvider }: UseGeminiOptions
       unsubscribeError();
       unsubscribeCommand();
     };
-  }, [onExecuteCommand]);
+  }, [onExecuteCommand, onDone]);
 
   const sendMessage = useCallback(
     (
@@ -181,13 +183,30 @@ export function useGemini({ onExecuteCommand, activeProvider }: UseGeminiOptions
           content: m.content,
         }));
 
-      window.electronAPI.sendGeminiMessage(
-        userMessage.content,
-        historyForApi,
-        activeProvider,
-        customApiKey,
-        options
-      );
+      // Pre-extract content from all open tabs for AI context
+      (async () => {
+        let tabContext = '';
+        try {
+          const tabs = await window.electronAPI.tab.extractAllContent();
+          if (tabs && tabs.length > 0) {
+            tabContext = '\n\n--- OPEN TABS CONTENT ---\n' + tabs.map((t, i) =>
+              `[Tab ${i + 1}: ${t.title} (${t.url})]\n${t.content.substring(0, 4000)}`
+            ).join('\n\n') + '\n--- END TABS ---';
+          }
+        } catch { /* ignore extraction errors */ }
+
+        const messageWithContext = tabContext
+          ? userMessage.content + tabContext
+          : userMessage.content;
+
+        window.electronAPI.sendGeminiMessage(
+          messageWithContext,
+          historyForApi,
+          activeProvider,
+          customApiKey,
+          options
+        );
+      })();
     },
     [isLoading, activeProvider]
   );

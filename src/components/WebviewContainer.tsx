@@ -562,6 +562,10 @@ export const WebviewContainer = memo(function WebviewContainer({
                   style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', border: 'none' }}
                   ref={(el: Electron.WebviewTag | null) => registerWebviewRef(tab.id, el)}
                   javascript={true}
+                  nodeintegration="false"
+                  websecurity="true"
+                  allowpopups="false"
+                  disablewebsecurity="false"
                   useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 />
               );

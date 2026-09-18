@@ -196,20 +196,26 @@ export function HomescreenCalendar() {
 
       {selectedDate && showForm && (
         <div className="calendar-add-form">
-          <div className="calendar-form-events">
-            {(events[selectedDate] || []).map((ev, idx) => (
-              <div key={idx} className="calendar-event-chip">
-                <span className="calendar-event-chip-dot" style={{ backgroundColor: ev.color }} />
-                <span className="calendar-event-chip-time">{ev.time}</span>
-                <span className="calendar-event-chip-title">{ev.title}</span>
-                <button
-                  className="calendar-event-chip-delete"
-                  onClick={() => handleDeleteEvent(selectedDate, idx)}
-                >
-                  ×
-                </button>
+            <div className="calendar-form-events">
+            {(events[selectedDate] || []).length === 0 ? (
+              <div className="calendar-empty-events" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                No events on this date
               </div>
-            ))}
+            ) : (
+              (events[selectedDate] || []).map((ev, idx) => (
+                <div key={idx} className="calendar-event-chip">
+                  <span className="calendar-event-chip-dot" style={{ backgroundColor: ev.color }} />
+                  <span className="calendar-event-chip-time">{ev.time}</span>
+                  <span className="calendar-event-chip-title">{ev.title}</span>
+                  <button
+                    className="calendar-event-chip-delete"
+                    onClick={() => handleDeleteEvent(selectedDate, idx)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))
+            )}
           </div>
           <div className="calendar-form-row">
             <input

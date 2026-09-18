@@ -1,4 +1,4 @@
-import type { AgentRecordedAction, AgentUndoResult } from '../src/types/agent-contracts';
+import type { AgentRecordedAction, AgentUndoResult } from '../shared/agent-contracts';
 
 /**
  * Agent Action Undo & Reversible Operations Stack

@@ -3,7 +3,7 @@ import { app, BrowserWindow, session, ipcMain, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { securityManager, ScanResult } from './security-manager.js';
+import { securityManager, ScanResult } from './security-manager';
 
 interface DownloadItem {
   id: string;

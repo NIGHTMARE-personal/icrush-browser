@@ -18,7 +18,8 @@ import { ReaderMode } from './components/ReaderMode';
 import { TextToSpeech } from './components/TextToSpeech';
 import { ContextMenu, ContextMenuAction, buildWebviewMenuItems } from './components/ContextMenu';
 import { BookmarkToolbar } from './components/BookmarkToolbar';
-import { Bookmark } from './utils/bookmarks';
+import { ToastProvider, useToast } from './components/Toast';
+import { Bookmark, bookmarkStorage } from './utils/bookmarks';
 import { supabase } from './utils/supabase';
 import { useTabs } from './hooks/useTabs';
 import { useWebview } from './hooks/useWebview';
@@ -40,6 +41,7 @@ const isWindowIncognito = new URLSearchParams(window.location.search).get('incog
 
 export default function App() {
   const { tabs, activeId, createTab, updateTab, closeTab, focusTab, setTabs } = useTabs();
+  const { error, success, warning, info } = useToast();
 
   const activeTab = tabs.find(t => t.id === activeId);
   const isIncognitoActive = !!activeTab?.isIncognito || isWindowIncognito;
@@ -138,10 +140,25 @@ export default function App() {
   const [currentPalette, setCurrentPalette] = useState(
     () => localStorage.getItem('gemini-browser-palette') || 'default'
   );
-  const [profilePic, setProfilePic] = useState(
-    () => localStorage.getItem('gemini-browser-profile-pic') || ''
-  );
+  const [profilePic, setProfilePic] = useState(() => {
+    const activeId = localStorage.getItem('gemini-browser-active-profile-id') || '1';
+    return localStorage.getItem(`gemini-browser-profile-pic-${activeId}`) ||
+      localStorage.getItem('gemini-browser-profile-pic') || '';
+  });
   const [tabLayout, setTabLayout] = useState<'top' | 'sidebar'>(() => storage.getTabLayout());
+
+  // Sync profile pic when active profile changes
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'gemini-browser-active-profile-id' && e.newValue) {
+        const pic = localStorage.getItem(`gemini-browser-profile-pic-${e.newValue}`) ||
+          localStorage.getItem('gemini-browser-profile-pic') || '';
+        setProfilePic(pic);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDownloadManagerOpen, setIsDownloadManagerOpen] = useState(false);
   const [isPasswordManagerOpen, setIsPasswordManagerOpen] = useState(false);
@@ -391,6 +408,16 @@ export default function App() {
   const [canUndo, setCanUndo] = useState(false);
   const agentAbortRef = useRef<AbortController | null>(null);
 
+  // Agent loop state: enables act → observe → repeat cycle
+  const agentLoopRef = useRef<{
+    step: number;
+    maxSteps: number;
+    isRunning: boolean;
+    goalId: string;
+    lastResponse: string;
+    pendingCommands: boolean;
+  }>({ step: 0, maxSteps: 8, isRunning: false, goalId: '', lastResponse: '', pendingCommands: false });
+
   const [cloudConsentGranted, setCloudConsentGranted] = useState(() => {
     return localStorage.getItem('gemini-browser-cloud-consent') === 'true';
   });
@@ -401,7 +428,7 @@ export default function App() {
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [activeProvider, setActiveProvider] = useState<string>(() => storage.getActiveProvider());
 
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => bookmarkStorage.getBookmarks());
 
   // Load API keys on mount
   useEffect(() => {
@@ -579,6 +606,12 @@ export default function App() {
     const timer = setInterval(() => {
       TabMemoryManager.evaluateTabSuspensions(tabs, activeId, (tabIdToSuspend) => {
         handleUpdateTab(tabIdToSuspend, { isSuspended: true });
+        // Track cumulative memory saved by suspension (~160MB per suspended tab)
+        try {
+          const prev = parseInt(localStorage.getItem('tabSuspensionTotalSaved') || '0', 10);
+          localStorage.setItem('tabSuspensionTotalSaved', String(prev + 160));
+          window.dispatchEvent(new Event('tab-suspended-confetti'));
+        } catch { /* ignore */ }
       });
     }, 60000);
     return () => clearInterval(timer);
@@ -1187,11 +1220,6 @@ export default function App() {
         e.preventDefault();
         handleAddressNavigate('about:history');
       }
-      // Ctrl+J: Open Downloads
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
-        e.preventDefault();
-        setIsDownloadManagerOpen(prev => !prev);
-      }
       // Ctrl+Shift+A: Open Tab Search
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
@@ -1226,6 +1254,21 @@ export default function App() {
       };
 
       await window.electronAPI.db.addHistory(entry);
+
+      // Update frequent sites for Quick Links widget
+      try {
+        const stored = JSON.parse(localStorage.getItem('gemini-browser-frequent-sites') || '[]') as Array<{ name: string; url: string; count: number }>;
+        const domain = new URL(url).hostname.replace('www.', '');
+        const existing = stored.find(s => s.url.includes(domain));
+        if (existing) {
+          existing.count = (existing.count || 1) + 1;
+        } else {
+          stored.push({ name: title || domain, url, count: 1 });
+        }
+        // Keep top 20 by visit count
+        stored.sort((a, b) => (b.count || 0) - (a.count || 0));
+        localStorage.setItem('gemini-browser-frequent-sites', JSON.stringify(stored.slice(0, 20)));
+      } catch { /* ignore URL parse errors */ }
 
       const isSyncActive = localStorage.getItem('gemini-browser-sync-active') === 'true';
       if (isSyncActive) {
@@ -1264,8 +1307,8 @@ export default function App() {
     async (url: string, title: string) => {
       const existing = bookmarks.find(b => b.url === url);
       if (existing) {
+        bookmarkStorage.deleteBookmark(existing.id);
         setBookmarks(prev => prev.filter(b => b.url !== url));
-        await window.electronAPI.db.deleteBookmark(existing.id);
 
         const isSyncActive = localStorage.getItem('gemini-browser-sync-active') === 'true';
         if (isSyncActive) {
@@ -1275,15 +1318,8 @@ export default function App() {
           });
         }
       } else {
-        const newBookmark: Bookmark = {
-          id: generateUUID(),
-          url,
-          title,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        setBookmarks(prev => [...prev, newBookmark]);
-        await window.electronAPI.db.addBookmark(newBookmark);
+        const newBookmark = bookmarkStorage.addBookmark({ url, title });
+        setBookmarks(prev => [newBookmark, ...prev]);
 
         const isSyncActive = localStorage.getItem('gemini-browser-sync-active') === 'true';
         if (isSyncActive) {
@@ -1505,6 +1541,7 @@ export default function App() {
   }, [activeId, searchEngine, navigateToUrl]);
 
   const handleOpenAIChatWindow = useCallback((initialPrompt?: string) => {
+    setIsAIChatWindowOpen(true);
     const url = initialPrompt ? `about:ai?q=${encodeURIComponent(initialPrompt)}` : 'about:ai';
     const currentActiveTab = tabs.find(t => t.id === activeId);
     if (currentActiveTab && (currentActiveTab.url === 'about:blank' || currentActiveTab.url === '')) {
@@ -1704,7 +1741,7 @@ export default function App() {
     } catch (err) {
       console.error('Failed to group tabs:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      alert(`AI Tab Grouping Failed:\n${errMsg}`);
+      error(`AI Tab Grouping Failed: ${errMsg}`);
     } finally {
       setAgentStatus('');
     }
@@ -1833,9 +1870,21 @@ export default function App() {
   };
 
   // Execute commands output by Gemini
+  // Ref to store sendMessage for use in handleExecuteCommands
+  const sendMessageRef = useRef<((content: string, apiKey?: string, options?: Record<string, unknown>) => void) | null>(null);
+
   const handleExecuteCommands = useCallback(
     commands => {
       if (!commands || !Array.isArray(commands)) return;
+
+      const execInWebview = (js: string) => {
+        const el = document.querySelector(`webview[data-tab-id="${activeId}"]`) as Electron.WebviewTag | null;
+        if (el) el.executeJavaScript(js);
+      };
+
+      // Check if this is the terminal action (AI is done)
+      const isDone = commands.some(cmd => cmd.action === 'openHtml') ||
+                     (commands.length === 1 && (commands[0].action === 'goBack' || commands[0].action === 'goForward' || commands[0].action === 'refresh' || commands[0].action === 'closeTab'));
 
       commands.forEach(cmd => {
         switch (cmd.action) {
@@ -1868,13 +1917,97 @@ export default function App() {
           case 'closeTab':
             if (activeId) handleCloseTab(activeId);
             break;
+          case 'type': {
+            if (!cmd.selector || !cmd.text) break;
+            execInWebview(`
+              (function() {
+                const el = document.querySelector('${cmd.selector.replace(/'/g, "\\'")}');
+                if (el) { el.focus(); el.value = '${cmd.text.replace(/'/g, "\\'")}'; el.dispatchEvent(new Event('input', {bubbles:true})); }
+              })();
+            `);
+            break;
+          }
+          case 'click': {
+            if (!cmd.selector) break;
+            execInWebview(`
+              (function() {
+                const el = document.querySelector('${cmd.selector.replace(/'/g, "\\'")}');
+                if (el) el.click();
+              })();
+            `);
+            break;
+          }
+          case 'fill': {
+            if (!cmd.selector || !cmd.value) break;
+            execInWebview(`
+              (function() {
+                const el = document.querySelector('${cmd.selector.replace(/'/g, "\\'")}');
+                if (el) { el.focus(); el.value = '${cmd.value.replace(/'/g, "\\'")}'; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+              })();
+            `);
+            break;
+          }
+          case 'press': {
+            if (!cmd.key) break;
+            execInWebview(`
+              (function() {
+                const active = document.activeElement || document.body;
+                active.dispatchEvent(new KeyboardEvent('keydown', {key: '${cmd.key}', code: '${cmd.key}', keyCode: ${cmd.key === 'Enter' ? 13 : cmd.key === 'Escape' ? 27 : 0}, bubbles: true}));
+                active.dispatchEvent(new KeyboardEvent('keyup', {key: '${cmd.key}', code: '${cmd.key}', keyCode: ${cmd.key === 'Enter' ? 13 : cmd.key === 'Escape' ? 27 : 0}, bubbles: true}));
+              })();
+            `);
+            break;
+          }
           case 'autofillForm':
             handleAutofillForm();
             break;
+          case 'openHtml': {
+            if (!cmd.html) break;
+            const htmlContent = cmd.html;
+            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent);
+            handleCreateTab(dataUrl);
+            break;
+          }
           default:
             console.warn('Unhandled browser command action:', cmd.action);
         }
       });
+
+      // AGENT LOOP: After commands execute, observe and continue
+      const loop = agentLoopRef.current;
+      if (loop.isRunning && !isDone && loop.step < loop.maxSteps) {
+        loop.step++;
+        loop.pendingCommands = true;
+
+        // Wait for page to load (navigate/search need time), then observe
+        const waitTime = commands.some(c => c.action === 'navigate' || c.action === 'search') ? 2500 : 800;
+        setTimeout(async () => {
+          // Extract current page content as observation
+          let observation = '';
+          try {
+            const el = document.querySelector(`webview[data-tab-id="${activeId}"]`) as Electron.WebviewTag | null;
+            if (el) {
+              observation = await el.executeJavaScript(`
+                (function() {
+                  const body = document.body;
+                  if (!body) return 'Page not loaded yet.';
+                  const clone = body.cloneNode(true);
+                  clone.querySelectorAll('script, style, noscript, svg, iframe').forEach(el => el.remove());
+                  let text = clone.innerText || '';
+                  return text.substring(0, 6000);
+                })();
+              `).catch(() => 'Could not read page content.');
+            }
+          } catch { observation = 'Could not observe page state.'; }
+
+          // Send observation back to AI for next step
+          if (sendMessageRef.current) {
+            const observationMsg = `[Step ${loop.step}/${loop.maxSteps}] Observation after executing commands:\n\nCurrent page content:\n${observation}\n\nContinue with the task. If the goal is achieved, respond with the final result. If you need to do more, execute the next commands.`;
+            sendMessageRef.current(observationMsg);
+          }
+          loop.pendingCommands = false;
+        }, waitTime);
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeId, searchEngine, navigateToUrl, goBack, goForward, reload, activeWebview]
@@ -1889,7 +2022,16 @@ export default function App() {
     clearGeminiError,
     setMessages,
     geminiError,
-  } = useGemini({ onExecuteCommand: (cmds) => handleExecuteCommands(cmds), activeProvider });
+  } = useGemini({
+    onExecuteCommand: (cmds) => handleExecuteCommands(cmds),
+    onDone: () => { agentLoopRef.current.isRunning = false; },
+    activeProvider,
+  });
+
+  // Wire sendMessageRef for use in handleExecuteCommands agent loop
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   // Sync sidebar messages to shared AI sessions store so dashboard can see them
   useEffect(() => {
@@ -1907,6 +2049,16 @@ export default function App() {
       aiSessions.upsertSession(session);
     }
   }, [messages]);
+
+  // Format a backend policy verdict (blocked / held-for-approval) for the agent transcript.
+  const describeAgentVerdict = (
+    label: string,
+    jsResult: { success: boolean; blocked?: boolean; requiresApproval?: boolean; reasons?: string[] }
+  ): string | null => {
+    if (jsResult.success || (!jsResult.blocked && !jsResult.requiresApproval)) return null;
+    const why = (jsResult.reasons || []).join('; ') || 'site policy';
+    return `  Policy ${jsResult.blocked ? 'blocked' : 'held for approval'} ${label}: ${why}\n`;
+  };
 
   // Agent confirmation helper - prompts user before sensitive actions
   const promptAgentConfirmation = useCallback((type: string, description: string): Promise<boolean> => {
@@ -2177,6 +2329,21 @@ export default function App() {
         // Handle navigation actions
         if (decision.action === 'navigate' && decision.url) {
           setAgentStatus(`Step ${stepNumber}/${maxSteps}: Navigating to ${decision.url}...`);
+          const checkNav = window.electronAPI.agent.checkNavigation;
+          const boundary = checkNav
+            ? await checkNav(currentUrl, decision.url).catch(() => ({ crosses: false, reasons: [] as string[] }))
+            : { crosses: false, reasons: [] as string[] };
+          if (boundary.crosses) {
+            const ok = await promptAgentConfirmation(
+              'navigate',
+              `Crossing trust zone (${boundary.reasons.join('; ')}) — navigate to ${decision.url}?`
+            );
+            if (!ok) {
+              agentHistoryLogs += '  Skipped: User declined cross-zone navigation\n';
+              await new Promise(resolve => setTimeout(resolve, 500));
+              continue;
+            }
+          }
           navigateToUrl(decision.url);
           if (activeWebview) {
             await waitForWebviewReady(activeWebview, 6000);
@@ -2186,6 +2353,21 @@ export default function App() {
         } else if (decision.action === 'search' && decision.query) {
           setAgentStatus(`Step ${stepNumber}/${maxSteps}: Searching for "${decision.query}"...`);
           const searchUrl = normalizeUrl(decision.query, searchEngine);
+          const checkSearchNav = window.electronAPI.agent.checkNavigation;
+          const searchBoundary = checkSearchNav
+            ? await checkSearchNav(currentUrl, searchUrl).catch(() => ({ crosses: false, reasons: [] as string[] }))
+            : { crosses: false, reasons: [] as string[] };
+          if (searchBoundary.crosses) {
+            const okSearch = await promptAgentConfirmation(
+              'navigate',
+              `Crossing trust zone (${searchBoundary.reasons.join('; ')}) — search via ${searchUrl}?`
+            );
+            if (!okSearch) {
+              agentHistoryLogs += '  Skipped: User declined cross-zone search\n';
+              await new Promise(resolve => setTimeout(resolve, 500));
+              continue;
+            }
+          }
           navigateToUrl(searchUrl);
           if (activeWebview) {
             await waitForWebviewReady(activeWebview, 6000);
@@ -2200,6 +2382,7 @@ export default function App() {
               type: 'scroll',
               direction: decision.direction || 'down',
               amount: decision.amount || 500,
+              url: currentUrl,
             });
             if (jsResult.success && jsResult.jsCode) {
               try {
@@ -2207,6 +2390,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Scroll execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('scroll', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2230,6 +2416,7 @@ export default function App() {
             const jsResult = await window.electronAPI.agent.execute({
               type: 'click',
               selector: decision.selector,
+              url: currentUrl,
             });
             if (jsResult.success && jsResult.jsCode) {
               try {
@@ -2246,6 +2433,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Click execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('click', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -2284,6 +2474,7 @@ export default function App() {
               type: 'type',
               selector: decision.selector,
               text: decision.text,
+              url: currentUrl,
             });
             if (jsResult.success && jsResult.jsCode) {
               try {
@@ -2291,6 +2482,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Type execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('type', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -2298,7 +2492,7 @@ export default function App() {
           // Extract page data
           setAgentStatus(`Step ${stepNumber}/${maxSteps}: Extracting page data...`);
           if (activeWebview) {
-            const jsResult = await window.electronAPI.agent.execute({ type: 'extract' });
+            const jsResult = await window.electronAPI.agent.execute({ type: 'extract', url: currentUrl });
             if (jsResult.success && jsResult.jsCode) {
               try {
                 const extracted = await activeWebview.executeJavaScript(jsResult.jsCode);
@@ -2309,6 +2503,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Extract execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('extract', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2351,6 +2548,7 @@ export default function App() {
             const jsResult = await window.electronAPI.agent.execute({
               type: 'fill_form',
               formFields: decision.formFields,
+              url: currentUrl,
             });
             if (jsResult.success && jsResult.jsCode) {
               try {
@@ -2358,6 +2556,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Fill form execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('fill_form', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2369,6 +2570,7 @@ export default function App() {
               type: 'select',
               selector: decision.selector,
               value: decision.value,
+              url: currentUrl,
             });
             if (jsResult.success && jsResult.jsCode) {
               try {
@@ -2376,6 +2578,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Select execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('select', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -2386,6 +2591,7 @@ export default function App() {
             const jsResult = await window.electronAPI.agent.execute({
               type: 'press_key',
               keys: decision.keys,
+              url: currentUrl,
             });
             if (jsResult.success && jsResult.jsCode) {
               try {
@@ -2393,6 +2599,9 @@ export default function App() {
               } catch (e) {
                 console.warn('Press key execution error:', e);
               }
+            } else {
+              const v = describeAgentVerdict('press_key', jsResult);
+              if (v) agentHistoryLogs += v;
             }
           }
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -2504,7 +2713,7 @@ export default function App() {
     }
 
     if (!cloudKey) {
-      alert("Please configure a Cloud AI API key in Settings (e.g. Gemini, Anthropic, OpenAI) to use Cloud Assist.");
+      warning('Please configure a Cloud AI API key in Settings (e.g. Gemini, Anthropic, OpenAI) to use Cloud Assist.');
       return;
     }
 
@@ -2648,8 +2857,28 @@ export default function App() {
 
       if (contextPrompt) {
         contextPrompt += `[User Prompt]\n${text}`;
+        // Start agent loop for multi-step tasks
+        const loop = agentLoopRef.current;
+        const isMultiStep = /compare|find|search|look|check|analyze|review|report|gather|collect|research|best|cheapest|price/i.test(text);
+        if (isMultiStep) {
+          loop.step = 0;
+          loop.maxSteps = 8;
+          loop.isRunning = true;
+          loop.goalId = Date.now().toString();
+          loop.lastResponse = '';
+        }
         sendMessage(contextPrompt, activeApiKey, options);
       } else {
+        // Start agent loop for multi-step tasks
+        const loop = agentLoopRef.current;
+        const isMultiStep = /compare|find|search|look|check|analyze|review|report|gather|collect|research|best|cheapest|price/i.test(text);
+        if (isMultiStep) {
+          loop.step = 0;
+          loop.maxSteps = 8;
+          loop.isRunning = true;
+          loop.goalId = Date.now().toString();
+          loop.lastResponse = '';
+        }
         sendMessage(text, activeApiKey, options);
       }
     }
@@ -2812,12 +3041,18 @@ ${pageDetails.pageText}`);
         break;
       case 'copyLink':
         if (action.data) {
-          try { await navigator.clipboard.writeText(action.data); } catch { /* ignore */ }
+          try { 
+            await navigator.clipboard.writeText(action.data);
+            success('Link copied');
+          } catch { /* ignore */ }
         }
         break;
       case 'copyImageUrl':
         if (action.data) {
-          try { await navigator.clipboard.writeText(action.data); } catch { /* ignore */ }
+          try { 
+            await navigator.clipboard.writeText(action.data);
+            success('Image URL copied');
+          } catch { /* ignore */ }
         }
         break;
       case 'saveImageAs':
@@ -2828,7 +3063,10 @@ ${pageDetails.pageText}`);
       case 'copyVideoUrl':
       case 'copyAudioUrl':
         if (action.data) {
-          try { await navigator.clipboard.writeText(action.data); } catch { /* ignore */ }
+          try { 
+            await navigator.clipboard.writeText(action.data);
+            success('URL copied');
+          } catch { /* ignore */ }
         }
         break;
       case 'pictureInPicture':
@@ -2857,6 +3095,7 @@ ${pageDetails.pageText}`);
           try {
             const clean = action.data.split('?')[0];
             await navigator.clipboard.writeText(clean);
+            success('Clean link copied');
           } catch { /* ignore */ }
         }
         break;
@@ -2907,7 +3146,8 @@ ${pageDetails.pageText}`);
   }, []);
 
   return (
-    <div className={`app-container theme-${currentPalette}`}>
+    <ToastProvider>
+      <div className={`app-container theme-${currentPalette}`}>
       {showRestorePrompt && (
         <div className="session-restore-banner animate-in" style={{
           position: 'fixed',
@@ -3049,6 +3289,7 @@ ${pageDetails.pageText}`);
             onToggleAdblock={handleToggleAdblock}
             blockedCount={blockedCount}
             detectedScripts={detectedScripts[activeId || ''] || []}
+            onSelectEngine={handleSelectEngine}
           />
         </div>
 
@@ -3102,7 +3343,7 @@ ${pageDetails.pageText}`);
           onInlineMenuAction={(action, text) => {
             switch (action) {
               case 'search':
-                handleCreateTab(`https://www.google.com/search?q=${encodeURIComponent(text)}`);
+                handleCreateTab(normalizeUrl(text, searchEngine));
                 break;
               case 'explain':
                 setIsSidebarOpen(true);
@@ -3374,5 +3615,6 @@ ${pageDetails.pageText}`);
         />
       )}
     </div>
+    </ToastProvider>
   );
 }

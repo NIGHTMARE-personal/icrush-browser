@@ -7,7 +7,7 @@ interface WeatherData {
   timestamp: number;
 }
 
-const CACHE_KEY = 'homescreen_weather_cache';
+const CACHE_KEY = 'homescreen-weather-cache';
 const CACHE_DURATION = 30 * 60 * 1000;
 
 const DEFAULT_LATITUDE = 28.6139;
