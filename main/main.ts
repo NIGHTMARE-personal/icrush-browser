@@ -301,13 +301,14 @@ function setupIncognitoSessionInterceptors(ses: Electron.Session) {
 
 function createBrowserWindow(isIncognito: boolean): BrowserWindow {
   const partition = isIncognito ? `incognito-${Date.now()}` : 'persist:default';
+  const appIconPath = path.join(__dirname, '../assets/icon.ico');
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
     title: 'ICRUSH Browser',
-    icon: undefined,
+    icon: fs.existsSync(appIconPath) ? appIconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload'),
       contextIsolation: true,

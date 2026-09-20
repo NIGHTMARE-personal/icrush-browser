@@ -372,6 +372,26 @@ interface ElectronAPI {
     clearAuditLog: () => Promise<boolean>;
     checkNavigation: (fromUrl: string, toUrl: string) => Promise<{ crosses: boolean; reasons: string[] }>;
     onAuditEvent: (callback: (event: AgentAuditEvent) => void) => () => void;
+    startLoop: (goal: string, context?: string) => Promise<{ success: boolean; loopId?: string; error?: string }>;
+    cancelLoop: () => Promise<boolean>;
+    getProgress: () => Promise<{ state: string; step: number; goal: string; error?: string } | null>;
+    undoLoop: () => Promise<{ success: boolean; error?: string }>;
+    toolList: () => Promise<Array<{ id: string; name: string; description: string; tier: string }>>;
+    toolExecute: (toolId: string, params: Record<string, unknown>) => Promise<{ success: boolean; result?: unknown; error?: string }>;
+    sandboxState: () => Promise<{ stepBudget: number; stepUsed: number; navAllowed: string[]; navBlocked: string[]; violations: number; killSwitchActive: boolean }>;
+    sandboxKillSwitch: (enable: boolean) => Promise<boolean>;
+    crossTabCompare: (tabIdA: string, tabIdB: string) => Promise<{ differences: Array<{ field: string; tabA: unknown; tabB: unknown }> }>;
+    crossTabMerge: (tabIds: string[]) => Promise<{ content: string; sources: Array<{ tabId: string; title: string; url: string }> }>;
+    memoryStats: () => Promise<{ episodic: number; semantic: number; procedural: number; working: number; skills: number }>;
+    memoryCompact: () => Promise<boolean>;
+    routerState: () => Promise<{ mode: string; localModels: string[]; cloudProviders: string[]; lastConsent?: string }>;
+    routerConsent: (provider: string) => Promise<boolean>;
+    routerRevoke: (provider?: string) => Promise<boolean>;
+    identityList: () => Promise<Array<{ credentialId: string; name: string; createdAt: number }>>;
+    identityCreate: (name: string) => Promise<{ credentialId: string; name: string }>;
+    identityRemove: (credentialId: string) => Promise<boolean>;
+    getApiKey: (provider: string) => Promise<string>;
+    setApiKey: (provider: string, key: string) => Promise<boolean>;
   };
   mcp: {
     listTools: () => Promise<MCPTool[]>;
@@ -644,6 +664,30 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on('agent:audit-event', handler);
       return () => ipcRenderer.off('agent:audit-event', handler);
     },
+    startLoop: (goal: string, context?: string) =>
+      ipcRenderer.invoke('agent:start', { goal, context: context || '' }),
+    cancelLoop: () => ipcRenderer.invoke('agent:cancel'),
+    getProgress: () => ipcRenderer.invoke('agent:get-progress'),
+    undoLoop: () => ipcRenderer.invoke('agent:undo'),
+    toolList: () => ipcRenderer.invoke('agent:tool-list'),
+    toolExecute: (toolId: string, params: Record<string, unknown>) =>
+      ipcRenderer.invoke('agent:tool-execute', toolId, params),
+    sandboxState: () => ipcRenderer.invoke('agent:sandbox-state'),
+    sandboxKillSwitch: (enable: boolean) => ipcRenderer.invoke('agent:sandbox-kill-switch', enable),
+    crossTabCompare: (tabIdA: string, tabIdB: string) =>
+      ipcRenderer.invoke('agent:cross-tab-compare', tabIdA, tabIdB),
+    crossTabMerge: (tabIds: string[]) =>
+      ipcRenderer.invoke('agent:cross-tab-merge', tabIds),
+    memoryStats: () => ipcRenderer.invoke('agent:memory-stats'),
+    memoryCompact: () => ipcRenderer.invoke('agent:memory-compact'),
+    routerState: () => ipcRenderer.invoke('agent:router-state'),
+    routerConsent: (provider: string) => ipcRenderer.invoke('agent:router-consent', provider),
+    routerRevoke: (provider?: string) => ipcRenderer.invoke('agent:router-revoke', provider),
+    identityList: () => ipcRenderer.invoke('agent:identity-list'),
+    identityCreate: (name: string) => ipcRenderer.invoke('agent:identity-create', name),
+    identityRemove: (credentialId: string) => ipcRenderer.invoke('agent:identity-remove', credentialId),
+    getApiKey: (provider: string) => ipcRenderer.invoke('agent:get-api-key', provider),
+    setApiKey: (provider: string, key: string) => ipcRenderer.invoke('agent:set-api-key', provider, key),
   },
 
   mcp: {

@@ -74,7 +74,8 @@
     },
     "files": [
       "dist/**/*",
-      "main/**/*"
+      "main/**/*",
+      "assets/**/*"
     ],
     "extraResources": [
       {
@@ -87,10 +88,11 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "anomalyco",
-      "repo": "opencode"
+      "owner": "NIGHTMARE-personal",
+      "repo": "icrush-browser"
     },
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         "nsis",
         "portable"

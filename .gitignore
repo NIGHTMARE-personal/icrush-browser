@@ -27,6 +27,10 @@ test-results/
 .env.local
 .env.*.local
 
+# Runtime encryption artifacts (generated in userData at runtime)
+.vault-key
+*.enc
+
 # Sensitive internal agent configurations
 .agents/
 .cursor/

@@ -250,13 +250,14 @@ electron_1.app.on('window-all-closed', () => {
 // ─── Helper Functions ─────────────────────────────────────────────────────
 function createBrowserWindow(isIncognito) {
     const partition = isIncognito ? `incognito-${Date.now()}` : 'persist:default';
+    const appIconPath = path_1.default.join(__dirname, '../assets/icon.ico');
     const win = new electron_1.BrowserWindow({
         width: 1400,
         height: 900,
         minWidth: 800,
         minHeight: 600,
         title: 'ICRUSH Browser',
-        icon: undefined,
+        icon: fs_1.default.existsSync(appIconPath) ? appIconPath : undefined,
         webPreferences: {
             preload: path_1.default.join(__dirname, 'preload'),
             contextIsolation: true,

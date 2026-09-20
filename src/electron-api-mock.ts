@@ -92,6 +92,30 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
       clearAuditLog: async () => true,
       checkNavigation: async () => ({ crosses: false, reasons: [] }),
       onAuditEvent: (callback) => dummyUnsubscribe(),
+      startLoop: async () => ({ success: true, loopId: 'mock-loop' }),
+      cancelLoop: async () => true,
+      getProgress: async () => null,
+      undoLoop: async () => ({ success: false, error: 'No active loop' }),
+      toolList: async () => [
+        { id: 'web_search', name: 'Web Search', description: 'Search the web via DuckDuckGo', tier: 'read' },
+        { id: 'fetch_page', name: 'Fetch Page', description: 'Fetch page content via HTTP', tier: 'read' },
+        { id: 'calculate', name: 'Calculate', description: 'Evaluate math expressions', tier: 'read' },
+      ],
+      toolExecute: async (toolId, params) => ({ success: true, result: null }),
+      sandboxState: async () => ({ stepBudget: 50, stepUsed: 0, navAllowed: [], navBlocked: [], violations: 0, killSwitchActive: false }),
+      sandboxKillSwitch: async (enable) => enable,
+      crossTabCompare: async () => ({ differences: [] }),
+      crossTabMerge: async () => ({ content: '', sources: [] }),
+      memoryStats: async () => ({ episodic: 0, semantic: 0, procedural: 0, working: 0, skills: 0 }),
+      memoryCompact: async () => true,
+      routerState: async () => ({ mode: 'local-only', localModels: [], cloudProviders: [] }),
+      routerConsent: async (provider) => true,
+      routerRevoke: async (provider) => true,
+      identityList: async () => [],
+      identityCreate: async (name) => ({ credentialId: `mock-${Date.now()}`, name }),
+      identityRemove: async (id) => true,
+      getApiKey: async (provider) => '',
+      setApiKey: async (provider, key) => true,
     },
 
     mcp: {
@@ -130,6 +154,9 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
       onPrompt: (callback) => () => {},
     },
     
+    news: {
+      fetchFeed: async (category) => [],
+    },
     extensions: {
       selectDirectory: async () => 'C:/MockExtensionPath',
       loadExtension: async (path: string) => ({
@@ -266,6 +293,8 @@ if (typeof window !== 'undefined' && !window.electronAPI) {
       shouldUseTor: async (url, torMode) => false,
       registerPartition: async (_partition) => true,
       unregisterPartition: async (_partition) => {},
+      fetchBridges: async (transport) => [],
+      syncBinaries: async () => {},
     },
     
     security: {
