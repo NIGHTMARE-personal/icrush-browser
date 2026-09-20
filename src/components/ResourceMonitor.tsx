@@ -46,7 +46,7 @@ export function ResourceMonitor({
 
   useEffect(() => {
     const pollMemory = () => {
-      const perf = (performance as Record<string, unknown>).memory as
+      const perf = (performance as unknown as Record<string, unknown>).memory as
         { usedJSHeapSize?: number } | undefined;
       if (perf?.usedJSHeapSize) {
         setRamUsedMB(Math.round(perf.usedJSHeapSize / (1024 * 1024)));
