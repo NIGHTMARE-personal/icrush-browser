@@ -17,6 +17,9 @@ dist-electron/
 out/
 build/
 main/main/
+main/shared/
+main/*.js
+main/*.js.map
 
 # Test reports
 playwright-report/

@@ -229,7 +229,7 @@ export function IcrushBrowserHomescreen({
   // Mode: 'web' vs 'ai'
   const [searchMode, setSearchMode] = useState<'web' | 'ai'>('web');
   const [query, setQuery] = useState('');
-  const [activeEngine, setActiveEngine] = useState(currentEngine);
+  const [activeEngine, setActiveEngine] = useState(currentEngine || 'google');
 
   // Time & Clock Settings
   const [is12Hour, setIs12Hour] = useState(() => localStorage.getItem('hs_12h') === 'true');
@@ -1142,7 +1142,7 @@ export function IcrushBrowserHomescreen({
                 onChange={e => setQuery(e.target.value)}
                 placeholder={
                   searchMode === 'web'
-                    ? `Search ${activeEngine.toUpperCase()}, type URL, or enter query...`
+                    ? `Search ${(activeEngine || currentEngine || 'google').toUpperCase()}, type URL, or enter query...`
                     : 'Ask anything, explore ideas, or formulate code prompts...'
                 }
                 style={{

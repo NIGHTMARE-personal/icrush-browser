@@ -150,7 +150,7 @@ export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: Toast['type'] = 'info', duration?: number) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type, duration }]);
     return id;
   }, []);

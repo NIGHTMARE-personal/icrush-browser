@@ -94,10 +94,14 @@
     "win": {
       "icon": "assets/icon.ico",
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "artifactName": "${productName}-${version}-setup.${ext}"
+      "artifactName": "ICRUSH-Browser-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

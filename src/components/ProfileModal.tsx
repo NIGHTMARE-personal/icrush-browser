@@ -526,7 +526,7 @@ export function ProfileModal({ isOpen, onClose, onSave, onOpenSettings }: Profil
                         fontWeight: '800',
                       }}
                     >
-                      {username.charAt(0).toUpperCase()}
+                      {((username || 'U').charAt(0)).toUpperCase()}
                     </div>
                   )}
                   <div

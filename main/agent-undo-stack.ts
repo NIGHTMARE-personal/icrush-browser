@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { AgentRecordedAction, AgentUndoResult } from '../shared/agent-contracts';
 
 /**

@@ -78,6 +78,7 @@ export function HistoryDashboard({ onNavigate, onCreateTab }: HistoryDashboardPr
       return cleanTitle;
     }
 
+    if (!domain) return 'History';
     return domain.charAt(0).toUpperCase() + domain.slice(1).split('.')[0];
   };
 
@@ -387,7 +388,7 @@ export function HistoryDashboard({ onNavigate, onCreateTab }: HistoryDashboardPr
                           if (parent && !parent.querySelector('.node-letter-fallback')) {
                             const fallback = document.createElement('span');
                             fallback.className = 'node-letter-fallback';
-                            fallback.innerText = group.displayName.charAt(0).toUpperCase();
+                            fallback.innerText = ((group.displayName || 'G').charAt(0)).toUpperCase();
                             parent.appendChild(fallback);
                           }
                         }}

@@ -576,7 +576,7 @@ export function DownloadsDashboard({ onCreateTab }: DownloadsDashboardProps) {
                             }}
                           >
                             <IconShield />
-                            <span>{item.scanResult.status.toUpperCase()}</span>
+                            <span>{(item.scanResult.status || 'safe').toUpperCase()}</span>
                           </span>
                         )}
                       </div>

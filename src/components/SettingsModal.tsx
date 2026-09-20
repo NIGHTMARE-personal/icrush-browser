@@ -1456,7 +1456,7 @@ export function SettingsModal({
                               fontWeight: '700',
                             }}
                           >
-                            {acc.name.charAt(0).toUpperCase()}
+                            {((acc.name || 'A').charAt(0)).toUpperCase()}
                           </div>
                           <div>
                             <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', display: 'block' }}>
@@ -3079,7 +3079,7 @@ export function SettingsModal({
                         }}
                       >
                         <span style={{ fontWeight: '600', textTransform: 'uppercase' }}>
-                          {type === 'none' ? 'Direct' : type.toUpperCase()}
+                          {type === 'none' ? 'Direct' : (type || '').toUpperCase()}
                         </span>
                         <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
                           {type === 'none'
@@ -3246,7 +3246,7 @@ export function SettingsModal({
                                 color: 'var(--color-primary)',
                               }}
                             >
-                              {bridge.type.toUpperCase()}
+                              {(bridge.type || '').toUpperCase()}
                             </span>
                             <span
                               style={{

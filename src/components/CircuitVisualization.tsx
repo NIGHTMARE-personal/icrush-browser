@@ -282,7 +282,7 @@ export function CircuitVisualization({
           <div className="circuit-details-content">
             {circuitDetails.map(detail => (
               <div key={detail.id} className="circuit-detail-item">
-                <span className="detail-type">{detail.type.toUpperCase()}</span>
+                <span className="detail-type">{(detail.type || '').toUpperCase()}</span>
                 <span className="detail-nickname">{detail.nickname}</span>
                 <span className="detail-fingerprint">{detail.fingerprint.slice(0, 16)}...</span>
                 <span className="detail-bandwidth">

@@ -2197,7 +2197,7 @@ export default function App() {
       if (isCloudProvider) {
         const confirmed = await promptAgentConfirmation(
           'cloud_synthesis',
-          `Send sanitized context (${Math.max(1, Math.round(payloadContext.length / 1024))} KB) to ${activeProvider.toUpperCase()} for HTML report generation?`
+          `Send sanitized context (${Math.max(1, Math.round(payloadContext.length / 1024))} KB) to ${(activeProvider || 'cloud').toUpperCase()} for HTML report generation?`
         );
         shouldProceedWithCloud = confirmed;
       }
@@ -3289,6 +3289,7 @@ ${pageDetails.pageText}`);
             onToggleAdblock={handleToggleAdblock}
             blockedCount={blockedCount}
             detectedScripts={detectedScripts[activeId || ''] || []}
+            currentEngine={searchEngine}
             onSelectEngine={handleSelectEngine}
           />
         </div>

@@ -38,7 +38,7 @@ function getDomain(url: string): string {
 }
 
 function getLetter(name: string): string {
-  return (name.charAt(0) || '?').toUpperCase();
+  return ((name && name.charAt(0)) || '?').toUpperCase();
 }
 
 function getFaviconUrl(url: string): string {

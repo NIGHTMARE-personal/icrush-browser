@@ -19,16 +19,18 @@ export function ResourceMonitor({
   forceCpuVisible = true,
   forceRamVisible = true,
 }: ResourceMonitorProps) {
-  const [cpu, setCpu] = useState(12);
-  const [ram, setRam] = useState(1800);
+  const [ramUsedMB, setRamUsedMB] = useState(0);
   const [totalSaved, setTotalSaved] = useState(0);
 
+  const activeTabsCount = tabs.filter(
+    t => !t.isSuspended && t.url !== 'about:blank' && t.url !== ''
+  ).length;
+  const suspendedCount = tabs.filter(t => t.isSuspended).length;
+
   useEffect(() => {
-    // Load cumulative memory saved from localStorage
     const saved = localStorage.getItem('tabSuspensionTotalSaved');
     setTotalSaved(saved ? parseInt(saved) : 0);
 
-    // Watch for updates
     const handleStorageUpdate = () => {
       const updated = localStorage.getItem('tabSuspensionTotalSaved');
       setTotalSaved(updated ? parseInt(updated) : 0);
@@ -43,33 +45,21 @@ export function ResourceMonitor({
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      // CPU Jitter: base of 4% + 3% per active webview + random fluctuation
-      const activeTabsCount = tabs.filter(
-        t => !t.isSuspended && t.url !== 'about:blank' && t.url !== ''
-      ).length;
-      const baseCpu = 5 + activeTabsCount * 4;
-      const jitter = Math.sin(Date.now() / 2000) * 2 + (Math.random() - 0.5) * 3;
-      setCpu(Math.max(2, Math.min(99, Math.round(baseCpu + jitter))));
-
-      // RAM Calculation: base 550MB + 160MB per active tab + 25MB per suspended tab
-      const suspendedCount = tabs.filter(t => t.isSuspended).length;
-      const calculatedRam = 550 + activeTabsCount * 160 + suspendedCount * 25;
-      const ramJitter = Math.cos(Date.now() / 3000) * 15 + (Math.random() - 0.5) * 10;
-      setRam(Math.round(calculatedRam + ramJitter));
-    }, 2000);
-
+    const pollMemory = () => {
+      const perf = (performance as Record<string, unknown>).memory as
+        { usedJSHeapSize?: number } | undefined;
+      if (perf?.usedJSHeapSize) {
+        setRamUsedMB(Math.round(perf.usedJSHeapSize / (1024 * 1024)));
+      }
+    };
+    pollMemory();
+    const interval = setInterval(pollMemory, 3000);
     return () => clearInterval(interval);
-  }, [tabs]);
+  }, []);
 
   // SVG Progress Ring Parameters
   const radius = 28;
   const circumference = 2 * Math.PI * radius;
-  const cpuOffset = circumference - (cpu / 100) * circumference;
-
-  // Assuming 16GB total system memory (16384 MB)
-  const ramPercent = Math.min(100, (ram / 16384) * 100);
-  const ramOffset = circumference - (ramPercent / 100) * circumference;
 
   const formatSaved = (mb: number) => {
     if (mb >= 1024) {
@@ -78,8 +68,8 @@ export function ResourceMonitor({
     return `${mb} MB`;
   };
 
-  const activeTabs = tabs.filter(t => !t.isSuspended && t.url !== 'about:blank' && t.url !== '');
-  const suspendedTabs = tabs.filter(t => t.isSuspended);
+  const ramPercent = ramUsedMB > 0 ? Math.min(100, (ramUsedMB / 8192) * 100) : 0;
+  const ramOffset = circumference - (ramPercent / 100) * circumference;
 
   return (
     <div className="resource-monitor-card glassmorphic-card">
@@ -103,7 +93,7 @@ export function ResourceMonitor({
       </div>
 
       <div className="monitor-gauges-row">
-        {/* CPU circular progress gauge */}
+        {/* Active Tabs gauge */}
         {forceCpuVisible && (
           <div className="gauge-container animate-in">
             <svg className="gauge-svg" width="70" height="70" viewBox="0 0 70 70">
@@ -115,13 +105,13 @@ export function ResourceMonitor({
                 r={radius}
                 strokeWidth="5"
                 strokeDasharray={circumference}
-                strokeDashoffset={cpuOffset}
+                strokeDashoffset={circumference - (Math.min(100, activeTabsCount * 10) / 100) * circumference}
                 strokeLinecap="round"
               />
             </svg>
             <div className="gauge-label">
-              <span className="gauge-value">{cpu}%</span>
-              <span className="gauge-name">CPU</span>
+              <span className="gauge-value">{activeTabsCount}</span>
+              <span className="gauge-name">Tabs</span>
             </div>
           </div>
         )}
@@ -143,8 +133,8 @@ export function ResourceMonitor({
               />
             </svg>
             <div className="gauge-label">
-              <span className="gauge-value">{(ram / 1024).toFixed(1)}G</span>
-              <span className="gauge-name">RAM</span>
+              <span className="gauge-value">{ramUsedMB > 0 ? `${(ramUsedMB / 1024).toFixed(1)}G` : '—'}</span>
+              <span className="gauge-name">JS Heap</span>
             </div>
           </div>
         )}
@@ -184,11 +174,11 @@ export function ResourceMonitor({
       <div className="monitor-details-list">
         <div className="details-row">
           <span>Active Subprocesses</span>
-          <span className="glow-blue">{activeTabs.length} tabs</span>
+          <span className="glow-blue">{activeTabsCount} tabs</span>
         </div>
         <div className="details-row">
           <span>Suspended (Sleeping)</span>
-          <span className="glow-purple">{suspendedTabs.length} tabs</span>
+          <span className="glow-purple">{suspendedCount} tabs</span>
         </div>
       </div>
     </div>

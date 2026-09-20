@@ -18,6 +18,7 @@
  * - Memory is bounded (max entries, TTL)
  * - No external services — 100% on-device
  */
+import crypto from 'crypto';
 import { agentVault } from './agent-memory-vault';
 import { getLocalEmbedding, localSemanticSearch } from './local-model-router';
 import type { AgentStep, StepResult, AgentGoal } from './agent-loop';

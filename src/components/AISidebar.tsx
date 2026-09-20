@@ -321,7 +321,7 @@ export const AISidebar = memo(function AISidebar({
               letterSpacing: '0.12em',
             }}
           >
-            {activeProvider.toUpperCase()}
+            {(activeProvider || 'AI').toUpperCase()}
           </span>
         </div>
 

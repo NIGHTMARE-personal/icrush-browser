@@ -58,7 +58,7 @@ export function AddressBar({
   blockedCount,
   detectedScripts,
   onSelectEngine: onSelectEngineProp,
-  currentEngine,
+  currentEngine = 'google',
 }: AddressBarProps) {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -369,7 +369,7 @@ export function AddressBar({
               type="button"
               className="search-engine-picker-btn"
               onClick={() => setIsEngineDropdownOpen(!isEngineDropdownOpen)}
-              title={`Active Search Engine: ${currentEngine.toUpperCase()}`}
+              title={`Active Search Engine: ${(currentEngine || 'google').toUpperCase()}`}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -481,7 +481,7 @@ export function AddressBar({
             onChange={e => setInputValue(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-            placeholder={`Search ${currentEngine.toUpperCase()} or type a URL...`}
+            placeholder={`Search ${(currentEngine || 'google').toUpperCase()} or type a URL...`}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'copy';

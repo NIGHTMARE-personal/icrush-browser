@@ -797,7 +797,7 @@ export function ExtensionsDashboard({
                           fontWeight: '800',
                         }}
                       >
-                        {ext.name.charAt(0).toUpperCase()}
+                        {((ext.name || 'E').charAt(0)).toUpperCase()}
                       </div>
 
                       <div>
@@ -1220,7 +1220,7 @@ export function ExtensionsDashboard({
                     justifyContent: 'center',
                   }}
                 >
-                  {detailsExt.name.charAt(0).toUpperCase()}
+                  {((detailsExt.name || 'E').charAt(0)).toUpperCase()}
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>{detailsExt.name}</h3>

@@ -42,7 +42,7 @@ export const bookmarkStorage = {
     const bookmarks = bookmarkStorage.getBookmarks();
     const newBookmark: Bookmark = {
       ...bookmark,
-      id: crypto.randomUUID?.() || `bookmark-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: crypto.randomUUID(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -107,7 +107,7 @@ export const bookmarkStorage = {
     const folders = bookmarkStorage.getFolders();
     const newFolder: BookmarkFolder = {
       ...folder,
-      id: crypto.randomUUID?.() || `folder-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: crypto.randomUUID(),
       createdAt: Date.now(),
     };
     bookmarkStorage.setFolders([...folders, newFolder]);

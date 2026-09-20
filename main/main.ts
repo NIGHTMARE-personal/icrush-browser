@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, session, Menu, shell, safeStorage, webContents } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { streamGemini, autoDetectModel, getCloudPlan, callLocalOllama, synthesizeResearchReport, getRecommendedLocalModel, ensureOllamaRunning, callProviderModel } from './gemini';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { initDownloadManager } from './download-manager';

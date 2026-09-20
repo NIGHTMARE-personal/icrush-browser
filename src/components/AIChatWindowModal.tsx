@@ -147,16 +147,50 @@ export function AIChatWindowModal({
     });
   };
 
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
   const handleVoiceToggle = () => {
     if (isVoiceListening) {
+      recognitionRef.current?.stop();
       setIsVoiceListening(false);
-    } else {
-      setIsVoiceListening(true);
-      // Simulate speech-to-text placeholder for UI responsiveness
-      setTimeout(() => {
-        setIsVoiceListening(false);
-      }, 4000);
+      return;
     }
+
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      error('Speech recognition is not supported in this browser.');
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInput(prev => prev + transcript);
+    };
+
+    recognition.onend = () => {
+      setIsVoiceListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (event.error !== 'aborted') {
+        error(`Speech recognition error: ${event.error}`);
+      }
+      setIsVoiceListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsVoiceListening(true);
   };
 
   const currentModel = (() => {
